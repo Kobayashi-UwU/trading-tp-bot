@@ -230,7 +230,22 @@ def _handle_admin(text: str, reply_token: str) -> None:
     cmd = parts[0].lower()
     arg = parts[1].strip() if len(parts) > 1 else ""
 
-    if cmd == "/addpending" and arg:
+    if cmd == "/verifyme" and arg:
+        iux_id = arg.strip()
+        display_name = get_display_name(ADMIN_LINE_USER_ID)
+        db.upsert_user(
+            ADMIN_LINE_USER_ID,
+            iux_user_id=iux_id,
+            status="verified",
+            state="done",
+            display_name=display_name,
+        )
+        reply(reply_token,
+            f"✅ ลงทะเบียนตัวเองเรียบร้อยแล้วครับ\n"
+            f"IUX ID: {iux_id}\n"
+            f"คุณจะได้รับ Daily Signal ทุกเช้า 8:00 น. ด้วยครับ 📊")
+
+    elif cmd == "/addpending" and arg:
         iux_id = arg.strip()
         existing = db.get_user_by_iux_id(iux_id)
         if existing:
@@ -369,6 +384,7 @@ def _handle_admin(text: str, reply_token: str) -> None:
         reply(
             reply_token,
             "📋 Admin Commands:\n\n"
+            "/verifyme [IUX_ID]    — ลงทะเบียนตัวเองเป็น verified user\n"
             "/addpending [ID]      — เพิ่ม IUX ID เข้าระบบ (manual)\n"
             "/verify [ID]          — ยืนยัน user\n"
             "/reject [ID]          — ปฏิเสธ user\n"
