@@ -230,7 +230,20 @@ def _handle_admin(text: str, reply_token: str) -> None:
     cmd = parts[0].lower()
     arg = parts[1].strip() if len(parts) > 1 else ""
 
-    if cmd in ("/verify", "/vertify") and arg:
+    if cmd == "/addpending" and arg:
+        iux_id = arg.strip()
+        existing = db.get_user_by_iux_id(iux_id)
+        if existing:
+            reply(reply_token, f"⚠️ IUX ID: {iux_id} มีในระบบแล้ว (status: {existing.get('status')})")
+        else:
+            fake_line_id = f"MANUAL_{iux_id}"
+            db.upsert_user(fake_line_id, iux_user_id=iux_id, status="pending",
+                           state="done", display_name=f"[Manual] {iux_id}")
+            reply(reply_token,
+                f"✅ เพิ่ม IUX ID: {iux_id} เข้าระบบแล้ว\n"
+                f"ใช้ /verify {iux_id} เพื่อยืนยันได้เลย")
+
+    elif cmd in ("/verify", "/vertify") and arg:
         user = db.get_user_by_iux_id(arg)
         if user:
             db.upsert_user(user["line_user_id"], status="verified")
@@ -356,6 +369,7 @@ def _handle_admin(text: str, reply_token: str) -> None:
         reply(
             reply_token,
             "📋 Admin Commands:\n\n"
+            "/addpending [ID]      — เพิ่ม IUX ID เข้าระบบ (manual)\n"
             "/verify [ID]          — ยืนยัน user\n"
             "/reject [ID]          — ปฏิเสธ user\n"
             "/update [เก่า] [ใหม่]  — แก้ IUX ID ของ user\n"
