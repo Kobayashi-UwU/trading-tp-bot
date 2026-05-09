@@ -35,6 +35,131 @@ def get_market_data() -> str:
     return "\n".join(lines) if lines else "ไม่สามารถดึงข้อมูลตลาดได้"
 
 
+def get_gold_data() -> dict:
+    """ดึงข้อมูล XAUUSD แบบละเอียด หลายกรอบเวลา"""
+    result = {}
+    try:
+        df_1h = yf.download("GC=F", period="5d", interval="1h", progress=False)
+        df_1d = yf.download("GC=F", period="30d", interval="1d", progress=False)
+
+        if not df_1h.empty:
+            close_1h = df_1h["Close"].dropna()
+            high_1h = df_1h["High"].dropna()
+            low_1h = df_1h["Low"].dropna()
+
+            latest = float(close_1h.iloc[-1])
+            prev_1h = float(close_1h.iloc[-2])
+            prev_24h = float(close_1h.iloc[-24]) if len(close_1h) >= 24 else float(close_1h.iloc[0])
+
+            result["price"] = latest
+            result["change_1h"] = (latest - prev_1h) / prev_1h * 100
+            result["change_24h"] = (latest - prev_24h) / prev_24h * 100
+            result["high_5d"] = float(high_1h.tail(5 * 24).max())
+            result["low_5d"] = float(low_1h.tail(5 * 24).min())
+
+            # EMA 20 และ 50 (1h)
+            ema20 = float(close_1h.ewm(span=20).mean().iloc[-1])
+            ema50 = float(close_1h.ewm(span=50).mean().iloc[-1])
+            result["ema20_1h"] = ema20
+            result["ema50_1h"] = ema50
+
+            # RSI 14 (1h)
+            delta = close_1h.diff()
+            gain = delta.clip(lower=0).rolling(14).mean()
+            loss = (-delta.clip(upper=0)).rolling(14).mean()
+            rs = gain / loss
+            rsi = float((100 - (100 / (1 + rs))).iloc[-1])
+            result["rsi_1h"] = rsi
+
+        if not df_1d.empty:
+            close_1d = df_1d["Close"].dropna()
+            result["high_30d"] = float(df_1d["High"].dropna().tail(30).max())
+            result["low_30d"] = float(df_1d["Low"].dropna().tail(30).min())
+            result["ema20_1d"] = float(close_1d.ewm(span=20).mean().iloc[-1])
+
+    except Exception:
+        pass
+    return result
+
+
+def generate_gold_analysis() -> str:
+    """วิเคราะห์ทองคำ (XAUUSD) แบบละเอียดทันที"""
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    affiliate_link = os.environ.get("IUX_AFFILIATE_LINK", "https://iux.com")
+
+    bangkok = pytz.timezone("Asia/Bangkok")
+    now = datetime.now(bangkok).strftime("%d %b %Y %H:%M")
+
+    data = get_gold_data()
+
+    if not data:
+        return "❌ ไม่สามารถดึงข้อมูลราคาทองได้ในขณะนี้ครับ"
+
+    ch1 = f"+{data['change_1h']:.2f}%" if data.get("change_1h", 0) >= 0 else f"{data['change_1h']:.2f}%"
+    ch24 = f"+{data['change_24h']:.2f}%" if data.get("change_24h", 0) >= 0 else f"{data['change_24h']:.2f}%"
+
+    data_text = f"""
+ราคาปัจจุบัน: {data.get('price', 'N/A'):.2f} USD
+เปลี่ยนแปลง 1h: {ch1}
+เปลี่ยนแปลง 24h: {ch24}
+
+Technical (1H):
+  EMA20: {data.get('ema20_1h', 0):.2f}
+  EMA50: {data.get('ema50_1h', 0):.2f}
+  RSI14: {data.get('rsi_1h', 0):.1f}
+
+แนวรับ-แนวต้าน:
+  High 5 วัน: {data.get('high_5d', 0):.2f}
+  Low 5 วัน:  {data.get('low_5d', 0):.2f}
+  High 30 วัน: {data.get('high_30d', 0):.2f}
+  Low 30 วัน:  {data.get('low_30d', 0):.2f}
+  EMA20 Daily: {data.get('ema20_1d', 0):.2f}
+"""
+
+    prompt = f"""คุณเป็น AI Trading Analyst ของช่อง TradingTP เชี่ยวชาญด้านทองคำ (XAUUSD)
+
+ข้อมูล XAUUSD ณ {now}:
+{data_text}
+
+วิเคราะห์สถานการณ์ทองคำวันนี้อย่างละเอียด ภาษาไทย โดยครอบคลุม:
+1. Bias ตลาดวันนี้ (Bullish/Bearish/Sideways) พร้อมเหตุผลจาก EMA และ RSI
+2. แนวรับ-แนวต้านสำคัญที่ควรจับตา
+3. Setup เทรดที่ดีที่สุดวันนี้ (entry, TP, SL)
+4. สิ่งที่ต้องระวัง
+
+ใช้ format นี้:
+
+🏅 XAUUSD Daily Check — {now}
+
+📊 Bias: [Bullish/Bearish/Sideways]
+💰 ราคาปัจจุบัน: [ราคา]
+
+📈 การวิเคราะห์:
+[วิเคราะห์ 3-4 บรรทัด อ้างอิงจาก EMA, RSI, price action]
+
+🎯 แนวรับ-แนวต้าน:
+• แนวต้าน: [ราคา]
+• แนวรับ: [ราคา]
+
+✅ Setup แนะนำ:
+• [Buy/Sell] Zone: [ราคา]
+• TP1: [ราคา]  TP2: [ราคา]
+• SL: [ราคา]
+
+⚠️ ระวัง: [สิ่งที่ต้องระวังวันนี้ 1-2 บรรทัด]
+
+───────────────
+เทรดผ่าน IUX รับ spread ต่ำสุด
+👉 สมัครฟรี: {affiliate_link}"""
+
+    message = client.messages.create(
+        model="claude-opus-4-5",
+        max_tokens=800,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return message.content[0].text
+
+
 def generate_signal() -> str:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     affiliate_link = os.environ.get("IUX_AFFILIATE_LINK", "https://iux.com")

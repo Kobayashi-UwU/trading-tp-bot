@@ -44,7 +44,8 @@ def messaging_api() -> MessagingApi:
 
 def reply(reply_token: str, text: str) -> None:
     messaging_api().reply_message(
-        ReplyMessageRequest(reply_token=reply_token, messages=[TextMessage(text=text)])
+        ReplyMessageRequest(reply_token=reply_token,
+                            messages=[TextMessage(text=text)])
     )
 
 
@@ -162,12 +163,14 @@ def _handle_waiting_iux(user_id: str, text: str, reply_token: str) -> None:
 
 
 def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) -> None:
-    yes_words = {"ใช่", "yes", "ใช่ครับ", "ใช่ค่ะ", "ถูก", "ถูกต้อง", "ok", "okay", "โอเค", "ใช่เลย"}
+    yes_words = {"ใช่", "yes", "ใช่ครับ", "ใช่ค่ะ",
+                 "ถูก", "ถูกต้อง", "ok", "okay", "โอเค", "ใช่เลย"}
     no_words = {"ไม่", "no", "ไม่ใช่", "ผิด", "แก้", "แก้ไข", "เปลี่ยน"}
 
     if text.lower() in yes_words:
         pending = user.get("pending_iux_id")
-        db.upsert_user(user_id, iux_user_id=pending, pending_iux_id=None, status="pending", state="done")
+        db.upsert_user(user_id, iux_user_id=pending,
+                       pending_iux_id=None, status="pending", state="done")
         reply(
             reply_token,
             f"✅ บันทึก IUX ID: {pending} เรียบร้อยครับ\n\n"
@@ -196,7 +199,8 @@ def _handle_done(user: dict, reply_token: str) -> None:
     if status == "pending":
         reply(reply_token, "⏳ กำลังรอ Admin ยืนยันอยู่ครับ รอสักครู่นะครับ 🙏")
     elif status == "verified":
-        reply(reply_token, "✅ คุณได้รับสิทธิ์แล้วครับ! รอรับ Signal ทุกเช้า 8:00 น. ครับ 📊")
+        reply(reply_token,
+              "✅ คุณได้รับสิทธิ์แล้วครับ! รอรับ Signal ทุกเช้า 8:00 น. ครับ 📊")
     elif status == "rejected":
         db.upsert_user(user["line_user_id"], status="new", state="waiting_iux",
                        iux_user_id=None, pending_iux_id=None)
@@ -257,7 +261,8 @@ def _handle_admin(text: str, reply_token: str) -> None:
         users = db.get_all_users()
         verified = [u for u in users if u["status"] == "verified"]
         pending = [u for u in users if u["status"] == "pending"]
-        pending_str = "\n".join(f"  • {u['iux_user_id']}" for u in pending) or "  (ไม่มี)"
+        pending_str = "\n".join(
+            f"  • {u['iux_user_id']}" for u in pending) or "  (ไม่มี)"
         reply(
             reply_token,
             f"📊 สรุป Users ทั้งหมด\n\n"
@@ -276,6 +281,15 @@ def _handle_admin(text: str, reply_token: str) -> None:
         except Exception as e:
             push(ADMIN_LINE_USER_ID, f"❌ Generate signal ล้มเหลว: {e}")
 
+    elif cmd == "/dailycheck":
+        reply(reply_token, "⏳ กำลังวิเคราะห์ทองคำ รอแป๊บนึงครับ...")
+        from signal_gen import generate_gold_analysis
+        try:
+            analysis = generate_gold_analysis()
+            push(ADMIN_LINE_USER_ID, analysis)
+        except Exception as e:
+            push(ADMIN_LINE_USER_ID, f"❌ วิเคราะห์ทองไม่สำเร็จ: {e}")
+
     elif cmd == "/broadcast":
         reply(reply_token, "⏳ กำลัง broadcast signal ไปหา verified users...")
         from scheduler import broadcast_signal
@@ -289,12 +303,11 @@ def _handle_admin(text: str, reply_token: str) -> None:
             "/reject [IUX_ID] — ปฏิเสธ user\n"
             "/reset [IUX_ID]  — reset user ให้ส่ง ID ใหม่\n"
             "/list            — ดู users ทั้งหมด\n"
-            "/signal          — generate และส่ง signal ให้ตัวเอง\n"
+            "/signal          — generate signal ให้ตัวเอง\n"
+            "/dailycheck      — วิเคราะห์ทองคำทันที\n"
             "/broadcast       — broadcast ไปหา verified users ทันที\n"
             "/help            — แสดง commands",
         )
-    else:
-        reply(reply_token, "❓ ไม่รู้จัก command พิมพ์ /help ดู commands ได้ครับ")
 
 
 # ---------------------------------------------------------------------------
