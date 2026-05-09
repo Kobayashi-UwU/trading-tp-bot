@@ -35,54 +35,114 @@ def get_market_data() -> str:
     return "\n".join(lines) if lines else "ไม่สามารถดึงข้อมูลตลาดได้"
 
 
+def _s(v):
+    """แปลง Series element เป็น float อย่างปลอดภัย"""
+    if hasattr(v, 'iloc'):
+        v = v.iloc[0]
+    return float(v)
+
+
+def _rsi(close, period=14) -> float:
+    delta = close.diff()
+    gain = delta.clip(lower=0).rolling(period).mean()
+    loss = (-delta.clip(upper=0)).rolling(period).mean()
+    rs = gain / loss
+    return _s((100 - (100 / (1 + rs))).iloc[-1])
+
+
 def get_gold_data() -> dict:
-    """ดึงข้อมูล XAUUSD แบบละเอียด หลายกรอบเวลา"""
+    """ดึงข้อมูล XAUUSD แบบละเอียด: H4, H1, M15 + DXY + US10Y"""
     result = {}
     try:
-        df_1h = yf.download("GC=F", period="5d", interval="1h", progress=False)
-        df_1d = yf.download("GC=F", period="30d", interval="1d", progress=False)
+        df_1h = yf.download("GC=F", period="30d", interval="1h", progress=False)
+        df_15m = yf.download("GC=F", period="5d", interval="15m", progress=False)
+        df_1d = yf.download("GC=F", period="60d", interval="1d", progress=False)
 
-        def s(series_val):
-            """แปลง Series element เป็น float อย่างปลอดภัย"""
-            v = series_val
-            if hasattr(v, 'iloc'):
-                v = v.iloc[0]
-            return float(v)
-
+        # ── H1 indicators ────────────────────────────────────────────────────
         if not df_1h.empty:
-            close_1h = df_1h["Close"].dropna()
-            high_1h = df_1h["High"].dropna()
-            low_1h = df_1h["Low"].dropna()
+            close = df_1h["Close"].dropna()
+            high = df_1h["High"].dropna()
+            low = df_1h["Low"].dropna()
 
-            latest = s(close_1h.iloc[-1])
-            prev_1h = s(close_1h.iloc[-2])
-            prev_24h = s(close_1h.iloc[-24]) if len(close_1h) >= 24 else s(close_1h.iloc[0])
+            result["price"] = _s(close.iloc[-1])
+            result["change_1h"] = (_s(close.iloc[-1]) - _s(close.iloc[-2])) / _s(close.iloc[-2]) * 100
+            result["change_24h"] = (_s(close.iloc[-1]) - _s(close.iloc[-24])) / _s(close.iloc[-24]) * 100 if len(close) >= 24 else 0
 
-            result["price"] = latest
-            result["change_1h"] = (latest - prev_1h) / prev_1h * 100
-            result["change_24h"] = (latest - prev_24h) / prev_24h * 100
-            result["high_5d"] = s(high_1h.tail(5 * 24).max())
-            result["low_5d"] = s(low_1h.tail(5 * 24).min())
+            result["ema20_1h"] = _s(close.ewm(span=20).mean().iloc[-1])
+            result["ema50_1h"] = _s(close.ewm(span=50).mean().iloc[-1])
+            result["ema200_1h"] = _s(close.ewm(span=200).mean().iloc[-1])
+            result["rsi_1h"] = _rsi(close)
 
-            ema20 = s(close_1h.ewm(span=20).mean().iloc[-1])
-            ema50 = s(close_1h.ewm(span=50).mean().iloc[-1])
-            result["ema20_1h"] = ema20
-            result["ema50_1h"] = ema50
+            # MACD (12, 26, 9)
+            macd_line = close.ewm(span=12).mean() - close.ewm(span=26).mean()
+            signal_line = macd_line.ewm(span=9).mean()
+            hist = macd_line - signal_line
+            result["macd_line"] = _s(macd_line.iloc[-1])
+            result["macd_signal"] = _s(signal_line.iloc[-1])
+            result["macd_hist"] = _s(hist.iloc[-1])
+            result["macd_hist_prev"] = _s(hist.iloc[-2])
 
-            delta = close_1h.diff()
-            gain = delta.clip(lower=0).rolling(14).mean()
-            loss = (-delta.clip(upper=0)).rolling(14).mean()
-            rs = gain / loss
-            result["rsi_1h"] = s((100 - (100 / (1 + rs))).iloc[-1])
+            # Bollinger Bands (20, 2)
+            sma20 = close.rolling(20).mean()
+            std20 = close.rolling(20).std()
+            result["bb_upper"] = _s(sma20.iloc[-1]) + 2 * _s(std20.iloc[-1])
+            result["bb_middle"] = _s(sma20.iloc[-1])
+            result["bb_lower"] = _s(sma20.iloc[-1]) - 2 * _s(std20.iloc[-1])
 
+            result["high_1d"] = _s(high.tail(24).max())
+            result["low_1d"] = _s(low.tail(24).min())
+            result["high_5d"] = _s(high.tail(5 * 24).max())
+            result["low_5d"] = _s(low.tail(5 * 24).min())
+
+        # ── H4 (resample จาก H1) ─────────────────────────────────────────────
+        if not df_1h.empty:
+            df_4h = df_1h.resample("4h").agg(
+                {"Open": "first", "High": "max", "Low": "min", "Close": "last"}
+            ).dropna()
+            close_4h = df_4h["Close"].dropna()
+            result["ema20_4h"] = _s(close_4h.ewm(span=20).mean().iloc[-1])
+            result["ema50_4h"] = _s(close_4h.ewm(span=50).mean().iloc[-1])
+            result["rsi_4h"] = _rsi(close_4h)
+            result["high_4h_recent"] = _s(df_4h["High"].iloc[-2])
+            result["low_4h_recent"] = _s(df_4h["Low"].iloc[-2])
+
+        # ── M15 (Confirmation) ───────────────────────────────────────────────
+        if not df_15m.empty:
+            close_15m = df_15m["Close"].dropna()
+            result["rsi_15m"] = _rsi(close_15m)
+            result["ema20_15m"] = _s(close_15m.ewm(span=20).mean().iloc[-1])
+            result["price_15m"] = _s(close_15m.iloc[-1])
+
+        # ── Daily ────────────────────────────────────────────────────────────
         if not df_1d.empty:
             close_1d = df_1d["Close"].dropna()
-            result["high_30d"] = s(df_1d["High"].dropna().tail(30).max())
-            result["low_30d"] = s(df_1d["Low"].dropna().tail(30).min())
-            result["ema20_1d"] = s(close_1d.ewm(span=20).mean().iloc[-1])
+            result["ema20_1d"] = _s(close_1d.ewm(span=20).mean().iloc[-1])
+            result["high_30d"] = _s(df_1d["High"].dropna().tail(30).max())
+            result["low_30d"] = _s(df_1d["Low"].dropna().tail(30).min())
 
     except Exception:
         pass
+
+    # ── DXY ──────────────────────────────────────────────────────────────────
+    try:
+        dxy = yf.download("DX-Y.NYB", period="3d", interval="1h", progress=False)
+        if not dxy.empty:
+            dxy_c = dxy["Close"].dropna()
+            result["dxy"] = _s(dxy_c.iloc[-1])
+            result["dxy_change_1h"] = (_s(dxy_c.iloc[-1]) - _s(dxy_c.iloc[-2])) / _s(dxy_c.iloc[-2]) * 100
+    except Exception:
+        pass
+
+    # ── US10Y Bond Yield ──────────────────────────────────────────────────────
+    try:
+        tnx = yf.download("^TNX", period="5d", interval="1h", progress=False)
+        if not tnx.empty:
+            tnx_c = tnx["Close"].dropna()
+            result["us10y"] = _s(tnx_c.iloc[-1])
+            result["us10y_change_24h"] = _s(tnx_c.iloc[-1]) - _s(tnx_c.iloc[-24]) if len(tnx_c) >= 24 else 0
+    except Exception:
+        pass
+
     return result
 
 
@@ -99,76 +159,137 @@ def _gemini(prompt: str, max_tokens: int = 800) -> str:
     return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
+def _get_session_info(now_bkk) -> str:
+    hour = now_bkk.hour
+    if 0 <= hour < 7:
+        return "Asian Session (00:00–07:00) — Volatility ต่ำ ทองเคลื่อนไหวน้อย"
+    elif 7 <= hour < 14:
+        return "ช่วงรอ London Open — ตลาดยุโรปกำลังจะเปิด"
+    elif 14 <= hour < 17:
+        return "London Open (14:00–17:00) — Volatility สูง ระวังการ Breakout"
+    elif 17 <= hour < 19:
+        return "ช่วงระหว่าง Session — Volatility ลดลงชั่วคราว"
+    elif 19 <= hour < 22:
+        return "NY Open (19:00–22:00) — Volatility สูงสุด ข่าวสหรัฐมีผลมาก"
+    else:
+        return "ช่วง NY Late Session (22:00–00:00) — Volatility เริ่มลดลง"
+
+
 def generate_gold_analysis() -> str:
-    """วิเคราะห์ทองคำ (XAUUSD) แบบละเอียดทันที"""
+    """วิเคราะห์ทองคำ (XAUUSD) ใน 5-10 ชั่วโมงข้างหน้า ตาม framework TradingTP"""
     affiliate_link = os.environ.get("IUX_AFFILIATE_LINK", "https://iux.com")
 
     bangkok = pytz.timezone("Asia/Bangkok")
-    now = datetime.now(bangkok).strftime("%d %b %Y %H:%M")
+    now = datetime.now(bangkok)
+    now_str = now.strftime("%d %b %Y %H:%M")
+    session_info = _get_session_info(now)
 
     data = get_gold_data()
-
     if not data:
         return "❌ ไม่สามารถดึงข้อมูลราคาทองได้ในขณะนี้ครับ"
 
-    ch1 = f"+{data['change_1h']:.2f}%" if data.get("change_1h", 0) >= 0 else f"{data['change_1h']:.2f}%"
-    ch24 = f"+{data['change_24h']:.2f}%" if data.get("change_24h", 0) >= 0 else f"{data['change_24h']:.2f}%"
+    def fmt_chg(v, decimals=2):
+        return f"+{v:.{decimals}f}%" if v >= 0 else f"{v:.{decimals}f}%"
+
+    macd_trend = "MACD บวก (Bullish momentum)" if data.get("macd_hist", 0) > 0 else "MACD ลบ (Bearish momentum)"
+    macd_accel = "Histogram ขยายตัว (momentum แรงขึ้น)" if abs(data.get("macd_hist", 0)) > abs(data.get("macd_hist_prev", 0)) else "Histogram หดตัว (momentum อ่อนลง)"
+    price = data.get("price", 0)
+    bb_pos = "ใกล้แนวต้าน Upper BB" if price > data.get("bb_middle", 0) + (data.get("bb_upper", 0) - data.get("bb_middle", 0)) * 0.7 else \
+             "ใกล้แนวรับ Lower BB" if price < data.get("bb_middle", 0) - (data.get("bb_middle", 0) - data.get("bb_lower", 0)) * 0.7 else \
+             "อยู่กลาง Bollinger Band"
 
     data_text = f"""
-ราคาปัจจุบัน: {data.get('price', 'N/A'):.2f} USD
-เปลี่ยนแปลง 1h: {ch1}
-เปลี่ยนแปลง 24h: {ch24}
+[ ราคาและการเปลี่ยนแปลง ]
+ราคาปัจจุบัน : {price:.2f} USD
+เปลี่ยน 1h   : {fmt_chg(data.get('change_1h', 0))}
+เปลี่ยน 24h  : {fmt_chg(data.get('change_24h', 0))}
 
-Technical (1H):
-  EMA20: {data.get('ema20_1h', 0):.2f}
-  EMA50: {data.get('ema50_1h', 0):.2f}
-  RSI14: {data.get('rsi_1h', 0):.1f}
+[ H4 — Trend หลัก ]
+EMA20 (H4)  : {data.get('ema20_4h', 0):.2f}
+EMA50 (H4)  : {data.get('ema50_4h', 0):.2f}
+RSI14 (H4)  : {data.get('rsi_4h', 0):.1f}
+High H4 ก่อน: {data.get('high_4h_recent', 0):.2f}
+Low H4 ก่อน : {data.get('low_4h_recent', 0):.2f}
 
-แนวรับ-แนวต้าน:
-  High 5 วัน: {data.get('high_5d', 0):.2f}
-  Low 5 วัน:  {data.get('low_5d', 0):.2f}
-  High 30 วัน: {data.get('high_30d', 0):.2f}
-  Low 30 วัน:  {data.get('low_30d', 0):.2f}
-  EMA20 Daily: {data.get('ema20_1d', 0):.2f}
+[ H1 — Entry Signal ]
+EMA20 (H1)  : {data.get('ema20_1h', 0):.2f}
+EMA50 (H1)  : {data.get('ema50_1h', 0):.2f}
+EMA200 (H1) : {data.get('ema200_1h', 0):.2f}
+RSI14 (H1)  : {data.get('rsi_1h', 0):.1f}
+MACD Line   : {data.get('macd_line', 0):.2f}  Signal: {data.get('macd_signal', 0):.2f}  Hist: {data.get('macd_hist', 0):.2f}
+  → {macd_trend} / {macd_accel}
+BB Upper    : {data.get('bb_upper', 0):.2f}
+BB Middle   : {data.get('bb_middle', 0):.2f}
+BB Lower    : {data.get('bb_lower', 0):.2f}
+  → ราคา{bb_pos}
+
+[ M15 — Confirmation ]
+RSI14 (M15) : {data.get('rsi_15m', 0):.1f}
+EMA20 (M15) : {data.get('ema20_15m', 0):.2f}
+
+[ Key Levels ]
+High 1 วัน  : {data.get('high_1d', 0):.2f}   Low 1 วัน : {data.get('low_1d', 0):.2f}
+High 5 วัน  : {data.get('high_5d', 0):.2f}   Low 5 วัน : {data.get('low_5d', 0):.2f}
+High 30 วัน : {data.get('high_30d', 0):.2f}   Low 30 วัน: {data.get('low_30d', 0):.2f}
+EMA20 Daily : {data.get('ema20_1d', 0):.2f}
+
+[ Fundamental ]
+DXY (Dollar Index): {data.get('dxy', 0):.3f}  ({fmt_chg(data.get('dxy_change_1h', 0))} /1h)
+US10Y Bond Yield  : {data.get('us10y', 0):.3f}%  (เปลี่ยน 24h: {data.get('us10y_change_24h', 0):+.3f}%)
+
+[ Session ปัจจุบัน ]
+{session_info}
 """
 
-    prompt = f"""คุณเป็น AI Trading Analyst ของช่อง TradingTP เชี่ยวชาญด้านทองคำ (XAUUSD)
+    prompt = f"""คุณเป็น Senior AI Trading Analyst ของช่อง TradingTP เชี่ยวชาญด้านทองคำ (XAUUSD)
 
-ข้อมูล XAUUSD ณ {now}:
+ข้อมูล ณ {now_str} (Bangkok Time):
 {data_text}
 
-วิเคราะห์สถานการณ์ทองคำวันนี้อย่างละเอียด ภาษาไทย โดยครอบคลุม:
-1. Bias ตลาดวันนี้ (Bullish/Bearish/Sideways) พร้อมเหตุผลจาก EMA และ RSI
-2. แนวรับ-แนวต้านสำคัญที่ควรจับตา
-3. Setup เทรดที่ดีที่สุดวันนี้ (entry, TP, SL)
-4. สิ่งที่ต้องระวัง
+ทำการวิเคราะห์ทิศทาง XAUUSD ใน 5-10 ชั่วโมงข้างหน้า โดยใช้ framework ดังนี้:
 
-ใช้ format นี้:
+ขั้นตอนการวิเคราะห์ (ทำตามลำดับ):
+1. ดู DXY + US10Y → กำหนด Fundamental Bias
+2. ดู H4 (EMA + RSI) → หา Trend หลัก
+3. ดู H1 (EMA, MACD, BB, RSI) → หาจังหวะเข้า
+4. ดู M15 (RSI + EMA) → Confirmation
+5. กำหนด Key Level S/R จาก High/Low 1d, 5d
+6. คำนึงถึง Session ปัจจุบันว่า Volatility อยู่ระดับไหน
 
-🏅 XAUUSD Daily Check — {now}
+น้ำหนัก: Technical 60% + Fundamental 40%
+ภาษาไทย กระชับ ชัดเจน ให้ข้อมูลที่ Trader นำไปใช้ได้จริง
 
-📊 Bias: [Bullish/Bearish/Sideways]
-💰 ราคาปัจจุบัน: [ราคา]
+ใช้ format นี้เท่านั้น:
 
-📈 การวิเคราะห์:
-[วิเคราะห์ 3-4 บรรทัด อ้างอิงจาก EMA, RSI, price action]
+🏅 XAUUSD Intraday Analysis — {now_str}
+⏱ วิเคราะห์ช่วง 5-10 ชั่วโมงข้างหน้า
 
-🎯 แนวรับ-แนวต้าน:
-• แนวต้าน: [ราคา]
-• แนวรับ: [ราคา]
+📡 Fundamental Bias:
+[DXY และ Bond Yield บอกอะไร 1-2 บรรทัด]
+
+📊 Technical Bias: [Bullish / Bearish / Sideways]
+[H4 Trend อธิบาย 1 บรรทัด]
+[H1 MACD + BB อธิบาย 1 บรรทัด]
+[M15 Confirmation 1 บรรทัด]
+
+🎯 Key Levels:
+• แนวต้าน: [ราคา 1]  [ราคา 2]
+• แนวรับ  : [ราคา 1]  [ราคา 2]
 
 ✅ Setup แนะนำ:
 • [Buy/Sell] Zone: [ราคา]
 • TP1: [ราคา]  TP2: [ราคา]
 • SL: [ราคา]
+• Risk/Reward: [1:X]
 
-⚠️ ระวัง: [สิ่งที่ต้องระวังวันนี้ 1-2 บรรทัด]
+⚠️ ระวัง:
+[Session + สิ่งที่ต้องระวัง 1-2 บรรทัด]
 
 ───────────────
 เทรดผ่าน IUX รับ spread ต่ำสุด
 👉 สมัครฟรี: {affiliate_link}"""
 
-    return _gemini(prompt, max_tokens=800)
+    return _gemini(prompt, max_tokens=900)
 
 
 def generate_signal() -> str:
