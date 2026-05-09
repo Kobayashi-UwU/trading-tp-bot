@@ -249,6 +249,39 @@ def _handle_admin(text: str, reply_token: str) -> None:
         else:
             reply(reply_token, f"❌ ไม่พบ IUX ID: {arg} ในระบบ")
 
+    elif cmd == "/update" and arg:
+        parts_arg = arg.split()
+        if len(parts_arg) != 2:
+            reply(reply_token, "❌ รูปแบบไม่ถูกต้อง\nใช้: /update [iux_id_เก่า] [iux_id_ใหม่]")
+            return
+        old_id, new_id = parts_arg
+        user = db.get_user_by_iux_id(old_id)
+        if user:
+            db.update_iux_id(user["line_user_id"], new_id)
+            reply(reply_token,
+                f"✅ อัปเดต IUX ID เรียบร้อย\n"
+                f"เก่า: {old_id}\n"
+                f"ใหม่: {new_id}\n"
+                f"Status: {user.get('status', '?')} (คงเดิม)")
+        else:
+            reply(reply_token, f"❌ ไม่พบ IUX ID: {old_id} ในระบบ")
+
+    elif cmd == "/info" and arg:
+        user = db.get_user_by_iux_id(arg)
+        if user:
+            verified_at = user.get("verified_at", "-") or "-"
+            created_at = user.get("created_at", "-") or "-"
+            reply(reply_token,
+                f"📋 ข้อมูล User\n\n"
+                f"IUX User ID : {user.get('iux_user_id', '-')}\n"
+                f"LINE User ID: {user.get('line_user_id', '-')}\n"
+                f"Status      : {user.get('status', '-')}\n"
+                f"State       : {user.get('state', '-')}\n"
+                f"สมัครวันที่ : {created_at[:10] if len(created_at) > 10 else created_at}\n"
+                f"Verify วันที่: {verified_at[:10] if len(verified_at) > 10 else verified_at}")
+        else:
+            reply(reply_token, f"❌ ไม่พบ IUX ID: {arg} ในระบบ")
+
     elif cmd == "/reset" and arg:
         user = db.get_user_by_iux_id(arg)
         if user:
@@ -299,14 +332,16 @@ def _handle_admin(text: str, reply_token: str) -> None:
         reply(
             reply_token,
             "📋 Admin Commands:\n\n"
-            "/verify [IUX_ID] — ยืนยัน user\n"
-            "/reject [IUX_ID] — ปฏิเสธ user\n"
-            "/reset [IUX_ID]  — reset user ให้ส่ง ID ใหม่\n"
-            "/list            — ดู users ทั้งหมด\n"
-            "/signal          — generate signal ให้ตัวเอง\n"
-            "/dailycheck      — วิเคราะห์ทองคำทันที\n"
-            "/broadcast       — broadcast ไปหา verified users ทันที\n"
-            "/help            — แสดง commands",
+            "/verify [ID]         — ยืนยัน user\n"
+            "/reject [ID]         — ปฏิเสธ user\n"
+            "/update [เก่า] [ใหม่] — แก้ IUX ID ของ user\n"
+            "/reset [ID]          — reset ให้ user ส่ง ID ใหม่\n"
+            "/info [ID]           — ดูข้อมูล user\n"
+            "/list                — ดู users ทั้งหมด\n"
+            "/signal              — generate signal ให้ตัวเอง\n"
+            "/dailycheck          — วิเคราะห์ทองคำทันที\n"
+            "/broadcast           — broadcast ไปหา verified users\n"
+            "/help                — แสดง commands",
         )
 
 

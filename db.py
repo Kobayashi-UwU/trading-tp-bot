@@ -50,6 +50,13 @@ class Database:
         data = {"line_user_id": line_user_id, **kwargs}
         self.client.table(self.table).upsert(data).execute()
 
+    def update_iux_id(self, line_user_id: str, new_iux_id: str) -> None:
+        self.client.table(self.table).upsert({
+            "line_user_id": line_user_id,
+            "iux_user_id": new_iux_id,
+            "pending_iux_id": None,
+        }).execute()
+
     def reset_user(self, line_user_id: str) -> None:
         self.client.table(self.table).upsert({
             "line_user_id": line_user_id,
