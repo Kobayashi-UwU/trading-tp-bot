@@ -230,7 +230,7 @@ def _handle_admin(text: str, reply_token: str) -> None:
     cmd = parts[0].lower()
     arg = parts[1].strip() if len(parts) > 1 else ""
 
-    if cmd == "/verify" and arg:
+    if cmd in ("/verify", "/vertify") and arg:
         user = db.get_user_by_iux_id(arg)
         if user:
             db.upsert_user(user["line_user_id"], status="verified")
