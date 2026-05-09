@@ -85,10 +85,19 @@ def health():
 # Event: Follow (user adds the OA)
 # ---------------------------------------------------------------------------
 
+def get_display_name(user_id: str) -> str:
+    try:
+        profile = messaging_api().get_profile(user_id)
+        return profile.display_name
+    except Exception:
+        return ""
+
+
 @handler.add(FollowEvent)
 def handle_follow(event):
     user_id = event.source.user_id
-    db.upsert_user(user_id, status="new", state="waiting_iux")
+    display_name = get_display_name(user_id)
+    db.upsert_user(user_id, status="new", state="waiting_iux", display_name=display_name)
     reply(
         event.reply_token,
         "สวัสดีครับ! ยินดีต้อนรับสู่ TradingTP Signal Bot 🎉\n\n"
@@ -266,6 +275,20 @@ def _handle_admin(text: str, reply_token: str) -> None:
         else:
             reply(reply_token, f"❌ ไม่พบ IUX ID: {old_id} ในระบบ")
 
+    elif cmd == "/findname" and arg:
+        users = db.search_by_name(arg)
+        if users:
+            lines = []
+            for u in users:
+                lines.append(
+                    f"👤 {u.get('display_name', '?')}\n"
+                    f"   IUX: {u.get('iux_user_id', '-')}\n"
+                    f"   Status: {u.get('status', '-')}"
+                )
+            reply(reply_token, f"🔍 ค้นหา '{arg}' พบ {len(users)} คน\n\n" + "\n\n".join(lines))
+        else:
+            reply(reply_token, f"❌ ไม่พบชื่อที่ค้นหา: '{arg}'")
+
     elif cmd == "/info" and arg:
         user = db.get_user_by_iux_id(arg)
         if user:
@@ -273,6 +296,7 @@ def _handle_admin(text: str, reply_token: str) -> None:
             created_at = user.get("created_at", "-") or "-"
             reply(reply_token,
                 f"📋 ข้อมูล User\n\n"
+                f"ชื่อ LINE    : {user.get('display_name', '-')}\n"
                 f"IUX User ID : {user.get('iux_user_id', '-')}\n"
                 f"LINE User ID: {user.get('line_user_id', '-')}\n"
                 f"Status      : {user.get('status', '-')}\n"
@@ -332,12 +356,13 @@ def _handle_admin(text: str, reply_token: str) -> None:
         reply(
             reply_token,
             "📋 Admin Commands:\n\n"
-            "/verify [ID]         — ยืนยัน user\n"
-            "/reject [ID]         — ปฏิเสธ user\n"
-            "/update [เก่า] [ใหม่] — แก้ IUX ID ของ user\n"
-            "/reset [ID]          — reset ให้ user ส่ง ID ใหม่\n"
-            "/info [ID]           — ดูข้อมูล user\n"
-            "/list                — ดู users ทั้งหมด\n"
+            "/verify [ID]          — ยืนยัน user\n"
+            "/reject [ID]          — ปฏิเสธ user\n"
+            "/update [เก่า] [ใหม่]  — แก้ IUX ID ของ user\n"
+            "/reset [ID]           — reset ให้ user ส่ง ID ใหม่\n"
+            "/info [ID]            — ดูข้อมูล user\n"
+            "/findname [ชื่อ]       — ค้นหา user จากชื่อ LINE\n"
+            "/list                 — ดู users ทั้งหมด\n"
             "/signal              — generate signal ให้ตัวเอง\n"
             "/dailycheck          — วิเคราะห์ทองคำทันที\n"
             "/broadcast           — broadcast ไปหา verified users\n"

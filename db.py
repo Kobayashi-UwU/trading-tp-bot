@@ -50,6 +50,15 @@ class Database:
         data = {"line_user_id": line_user_id, **kwargs}
         self.client.table(self.table).upsert(data).execute()
 
+    def search_by_name(self, keyword: str) -> list[dict]:
+        result = (
+            self.client.table(self.table)
+            .select("*")
+            .ilike("display_name", f"%{keyword}%")
+            .execute()
+        )
+        return result.data
+
     def update_iux_id(self, line_user_id: str, new_iux_id: str) -> None:
         self.client.table(self.table).upsert({
             "line_user_id": line_user_id,
