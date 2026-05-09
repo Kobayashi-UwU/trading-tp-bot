@@ -232,31 +232,37 @@ def _handle_admin(text: str, reply_token: str) -> None:
 
     if cmd in ("/verifyme", "/vertifyme") and arg:
         iux_id = arg.strip()
-        display_name = get_display_name(ADMIN_LINE_USER_ID)
-        db.upsert_user(
-            ADMIN_LINE_USER_ID,
-            iux_user_id=iux_id,
-            status="verified",
-            state="done",
-            display_name=display_name,
-        )
-        reply(reply_token,
-            f"✅ ลงทะเบียนตัวเองเรียบร้อยแล้วครับ\n"
-            f"IUX ID: {iux_id}\n"
-            f"คุณจะได้รับ Daily Signal ทุกเช้า 8:00 น. ด้วยครับ 📊")
+        try:
+            display_name = get_display_name(ADMIN_LINE_USER_ID)
+            db.upsert_user(
+                ADMIN_LINE_USER_ID,
+                iux_user_id=iux_id,
+                status="verified",
+                state="done",
+                display_name=display_name,
+            )
+            reply(reply_token,
+                f"✅ ลงทะเบียนตัวเองเรียบร้อยแล้วครับ\n"
+                f"IUX ID: {iux_id}\n"
+                f"คุณจะได้รับ Daily Signal ทุกเช้า 8:00 น. ด้วยครับ 📊")
+        except Exception as e:
+            reply(reply_token, f"❌ Error: {str(e)}")
 
     elif cmd == "/addpending" and arg:
         iux_id = arg.strip()
-        existing = db.get_user_by_iux_id(iux_id)
-        if existing:
-            reply(reply_token, f"⚠️ IUX ID: {iux_id} มีในระบบแล้ว (status: {existing.get('status')})")
-        else:
-            fake_line_id = f"MANUAL_{iux_id}"
-            db.upsert_user(fake_line_id, iux_user_id=iux_id, status="pending",
-                           state="done", display_name=f"[Manual] {iux_id}")
-            reply(reply_token,
-                f"✅ เพิ่ม IUX ID: {iux_id} เข้าระบบแล้ว\n"
-                f"ใช้ /verify {iux_id} เพื่อยืนยันได้เลย")
+        try:
+            existing = db.get_user_by_iux_id(iux_id)
+            if existing:
+                reply(reply_token, f"⚠️ IUX ID: {iux_id} มีในระบบแล้ว (status: {existing.get('status')})")
+            else:
+                fake_line_id = f"MANUAL_{iux_id}"
+                db.upsert_user(fake_line_id, iux_user_id=iux_id, status="pending",
+                               state="done", display_name=f"[Manual] {iux_id}")
+                reply(reply_token,
+                    f"✅ เพิ่ม IUX ID: {iux_id} เข้าระบบแล้ว\n"
+                    f"ใช้ /verify {iux_id} เพื่อยืนยันได้เลย")
+        except Exception as e:
+            reply(reply_token, f"❌ Error: {str(e)}")
 
     elif cmd in ("/verify", "/vertify") and arg:
         user = db.get_user_by_iux_id(arg)
