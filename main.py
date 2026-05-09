@@ -230,7 +230,7 @@ def _handle_admin(text: str, reply_token: str) -> None:
     cmd = parts[0].lower()
     arg = parts[1].strip() if len(parts) > 1 else ""
 
-    if cmd == "/verifyme" and arg:
+    if cmd in ("/verifyme", "/vertifyme") and arg:
         iux_id = arg.strip()
         display_name = get_display_name(ADMIN_LINE_USER_ID)
         db.upsert_user(
