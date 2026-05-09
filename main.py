@@ -14,7 +14,7 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     TextMessage,
 )
-from linebot.v3.webhooks import BlockEvent, FollowEvent, MessageEvent, TextMessageContent
+from linebot.v3.webhooks import UnfollowEvent, FollowEvent, MessageEvent, TextMessageContent
 
 from db import Database
 from scheduler import start_scheduler
@@ -102,8 +102,8 @@ def handle_follow(event):
 # Event: Block (user blocks the OA)
 # ---------------------------------------------------------------------------
 
-@handler.add(BlockEvent)
-def handle_block(event):
+@handler.add(UnfollowEvent)
+def handle_unfollow(event):
     db.upsert_user(event.source.user_id, status="blocked")
 
 
