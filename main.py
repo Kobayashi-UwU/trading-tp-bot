@@ -179,7 +179,8 @@ def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) ->
     if text.lower() in yes_words:
         pending = user.get("pending_iux_id")
         db.upsert_user(user_id, iux_user_id=pending,
-                       pending_iux_id=None, status="pending", state="done")
+                       pending_iux_id=None, status="pending", state="done",
+                       pending_notified=True)
         reply(
             reply_token,
             f"✅ บันทึก IUX ID: {pending} เรียบร้อยครับ\n\n"
@@ -205,11 +206,16 @@ def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) ->
 
 def _handle_done(user: dict, reply_token: str) -> None:
     status = user.get("status")
-    if status in ("pending", "verified"):
-        return  # ไม่ตอบระหว่างรอหรือหลัง verified
+    if status == "pending":
+        if not user.get("pending_notified"):
+            reply(reply_token, "⏳ กำลังรอ Admin ยืนยัน IUX User ID ของคุณอยู่ครับ\nจะแจ้งให้ทราบเมื่อผ่านแล้ว 🙏")
+            db.upsert_user(user["line_user_id"], pending_notified=True)
+        return
+    if status == "verified":
+        return  # verified แล้วไม่จำเป็นต้องตอบทุก message
     elif status == "rejected":
         db.upsert_user(user["line_user_id"], status="new", state="waiting_iux",
-                       iux_user_id=None, pending_iux_id=None)
+                       iux_user_id=None, pending_iux_id=None, pending_notified=False)
         reply(
             reply_token,
             "❌ IUX User ID ไม่ผ่านการยืนยันครับ\n\n"
