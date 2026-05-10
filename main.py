@@ -98,7 +98,8 @@ def handle_follow(event):
     user_id = event.source.user_id
     display_name = get_display_name(user_id)
     db.upsert_user(user_id, status="new", state="waiting_iux",
-                   display_name=display_name, pending_notified=False)
+                   display_name=display_name, pending_notified=False,
+                   waiting_iux_hinted=False)
     reply(
         event.reply_token,
         "สวัสดีครับ! ยินดีต้อนรับสู่ TradingTP 🎉\n\n"
@@ -159,20 +160,41 @@ def handle_message(event):
 # State handlers
 # ---------------------------------------------------------------------------
 
+_NO_IUX_WORDS = {
+    "ไม่มี", "ยังไม่มี", "ไม่มีครับ", "ไม่มีค่ะ", "ยังไม่มีครับ", "ยังไม่มีค่ะ",
+    "no", "nope", "ไม่ได้มี", "ไม่ได้สมัคร", "ยังไม่ได้สมัคร",
+}
+
+
 def _handle_waiting_iux(user_id: str, text: str, reply_token: str) -> None:
     iux_id = extract_iux_id(text)
     if iux_id:
-        db.upsert_user(user_id, pending_iux_id=iux_id, state="confirming")
+        db.upsert_user(user_id, pending_iux_id=iux_id, state="confirming",
+                       waiting_iux_hinted=False)
         reply(
             reply_token,
             f"รับ IUX User ID: {iux_id} ครับ\n\nถูกต้องไหมครับ?\n✅ พิมพ์ 'ใช่'\n❌ พิมพ์ 'ไม่'",
         )
-    else:
+    elif text.lower().strip() in _NO_IUX_WORDS:
         reply(
             reply_token,
-            "กรุณาส่ง IUX User ID ของคุณครับ\n\n"
-            "💡 IUX User ID คือตัวเลข 6 หรือ 8 หลักที่แสดงอยู่ในหน้า Profile ของ IUX ครับ",
+            "ไม่เป็นไรครับ สมัครฟรีได้เลยที่ลิงค์นี้เลยครับ 👇\n"
+            "https://iux.com/en/register?code=IuyjFrlz\n\n"
+            "สำหรับคนที่มีบัญชี IUX อยู่แล้ว ต้องโอนย้ายก่อนนะครับ\n"
+            "👇👇👇\n"
+            "https://www.iux.com/en/dashboard/ib-transfers-request\n\n"
+            "Partner referral code: IuyjFrlz\n\n"
+            "หลังจากโอนย้ายเสร็จแล้วส่ง IUX User ID มาได้เลยครับ 🙏",
         )
+    else:
+        user = db.get_user(user_id)
+        if not user or not user.get("waiting_iux_hinted"):
+            db.upsert_user(user_id, waiting_iux_hinted=True)
+            reply(
+                reply_token,
+                "กรุณาส่ง IUX User ID ของคุณครับ\n\n"
+                "💡 IUX User ID คือตัวเลข 6 หรือ 8 หลักที่แสดงอยู่ในหน้า Profile ของ IUX ครับ",
+            )
 
 
 def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) -> None:
