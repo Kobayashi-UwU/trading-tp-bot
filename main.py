@@ -97,11 +97,12 @@ def get_display_name(user_id: str) -> str:
 def handle_follow(event):
     user_id = event.source.user_id
     display_name = get_display_name(user_id)
-    db.upsert_user(user_id, status="new", state="waiting_iux", display_name=display_name)
+    db.upsert_user(user_id, status="new", state="waiting_iux",
+                   display_name=display_name)
     reply(
         event.reply_token,
         "สวัสดีครับ! ยินดีต้อนรับสู่ TradingTP Signal Bot 🎉\n\n"
-        "เพื่อรับ Daily Trading Signal ฟรีทุกเช้า 8:00 น.\n"
+        "เพื่อรับ Daily Trend ฟรีทุกเช้า 8:00 น. / Prompt หรือ โค้ดต่างๆ\n"
         "กรุณาส่ง IUX User ID ของคุณมาได้เลยครับ\n\n"
         "💡 IUX User ID คือตัวเลข 6 หรือ 8 หลัก\n"
         "ที่แสดงอยู่ในหน้า Profile ของ IUX ครับ",
@@ -163,12 +164,7 @@ def _handle_waiting_iux(user_id: str, text: str, reply_token: str) -> None:
             f"รับ IUX User ID: {iux_id} ครับ\n\nถูกต้องไหมครับ?\n✅ พิมพ์ 'ใช่'\n❌ พิมพ์ 'ไม่'",
         )
     else:
-        reply(
-            reply_token,
-            "ไม่พบ IUX User ID ในข้อความครับ 🤔\n\n"
-            "กรุณาส่งตัวเลข 6 หรือ 8 หลัก เช่น:\n"
-            "• 123456\n• 12345678\n• นี่ครับ 123456",
-        )
+        return
 
 
 def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) -> None:
@@ -205,11 +201,8 @@ def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) ->
 
 def _handle_done(user: dict, reply_token: str) -> None:
     status = user.get("status")
-    if status == "pending":
-        reply(reply_token, "⏳ กำลังรอ Admin ยืนยันอยู่ครับ รอสักครู่นะครับ 🙏")
-    elif status == "verified":
-        reply(reply_token,
-              "✅ คุณได้รับสิทธิ์แล้วครับ! รอรับ Signal ทุกเช้า 8:00 น. ครับ 📊")
+    if status in ("pending", "verified"):
+        return  # ไม่ตอบระหว่างรอหรือหลัง verified
     elif status == "rejected":
         db.upsert_user(user["line_user_id"], status="new", state="waiting_iux",
                        iux_user_id=None, pending_iux_id=None)
@@ -242,9 +235,9 @@ def _handle_admin(text: str, reply_token: str) -> None:
                 display_name=display_name,
             )
             reply(reply_token,
-                f"✅ ลงทะเบียนตัวเองเรียบร้อยแล้วครับ\n"
-                f"IUX ID: {iux_id}\n"
-                f"คุณจะได้รับ Daily Signal ทุกเช้า 8:00 น. ด้วยครับ 📊")
+                  f"✅ ลงทะเบียนตัวเองเรียบร้อยแล้วครับ\n"
+                  f"IUX ID: {iux_id}\n"
+                  f"คุณจะได้รับ Daily Signal ทุกเช้า 8:00 น. ด้วยครับ 📊")
         except Exception as e:
             reply(reply_token, f"❌ Error: {str(e)}")
 
@@ -253,14 +246,15 @@ def _handle_admin(text: str, reply_token: str) -> None:
         try:
             existing = db.get_user_by_iux_id(iux_id)
             if existing:
-                reply(reply_token, f"⚠️ IUX ID: {iux_id} มีในระบบแล้ว (status: {existing.get('status')})")
+                reply(
+                    reply_token, f"⚠️ IUX ID: {iux_id} มีในระบบแล้ว (status: {existing.get('status')})")
             else:
                 fake_line_id = f"MANUAL_{iux_id}"
                 db.upsert_user(fake_line_id, iux_user_id=iux_id, status="pending",
                                state="done", display_name=f"[Manual] {iux_id}")
                 reply(reply_token,
-                    f"✅ เพิ่ม IUX ID: {iux_id} เข้าระบบแล้ว\n"
-                    f"ใช้ /verify {iux_id} เพื่อยืนยันได้เลย")
+                      f"✅ เพิ่ม IUX ID: {iux_id} เข้าระบบแล้ว\n"
+                      f"ใช้ /verify {iux_id} เพื่อยืนยันได้เลย")
         except Exception as e:
             reply(reply_token, f"❌ Error: {str(e)}")
 
@@ -295,17 +289,18 @@ def _handle_admin(text: str, reply_token: str) -> None:
     elif cmd == "/update" and arg:
         parts_arg = arg.split()
         if len(parts_arg) != 2:
-            reply(reply_token, "❌ รูปแบบไม่ถูกต้อง\nใช้: /update [iux_id_เก่า] [iux_id_ใหม่]")
+            reply(
+                reply_token, "❌ รูปแบบไม่ถูกต้อง\nใช้: /update [iux_id_เก่า] [iux_id_ใหม่]")
             return
         old_id, new_id = parts_arg
         user = db.get_user_by_iux_id(old_id)
         if user:
             db.update_iux_id(user["line_user_id"], new_id)
             reply(reply_token,
-                f"✅ อัปเดต IUX ID เรียบร้อย\n"
-                f"เก่า: {old_id}\n"
-                f"ใหม่: {new_id}\n"
-                f"Status: {user.get('status', '?')} (คงเดิม)")
+                  f"✅ อัปเดต IUX ID เรียบร้อย\n"
+                  f"เก่า: {old_id}\n"
+                  f"ใหม่: {new_id}\n"
+                  f"Status: {user.get('status', '?')} (คงเดิม)")
         else:
             reply(reply_token, f"❌ ไม่พบ IUX ID: {old_id} ในระบบ")
 
@@ -319,7 +314,8 @@ def _handle_admin(text: str, reply_token: str) -> None:
                     f"   IUX: {u.get('iux_user_id', '-')}\n"
                     f"   Status: {u.get('status', '-')}"
                 )
-            reply(reply_token, f"🔍 ค้นหา '{arg}' พบ {len(users)} คน\n\n" + "\n\n".join(lines))
+            reply(
+                reply_token, f"🔍 ค้นหา '{arg}' พบ {len(users)} คน\n\n" + "\n\n".join(lines))
         else:
             reply(reply_token, f"❌ ไม่พบชื่อที่ค้นหา: '{arg}'")
 
@@ -329,14 +325,14 @@ def _handle_admin(text: str, reply_token: str) -> None:
             verified_at = user.get("verified_at", "-") or "-"
             created_at = user.get("created_at", "-") or "-"
             reply(reply_token,
-                f"📋 ข้อมูล User\n\n"
-                f"ชื่อ LINE    : {user.get('display_name', '-')}\n"
-                f"IUX User ID : {user.get('iux_user_id', '-')}\n"
-                f"LINE User ID: {user.get('line_user_id', '-')}\n"
-                f"Status      : {user.get('status', '-')}\n"
-                f"State       : {user.get('state', '-')}\n"
-                f"สมัครวันที่ : {created_at[:10] if len(created_at) > 10 else created_at}\n"
-                f"Verify วันที่: {verified_at[:10] if len(verified_at) > 10 else verified_at}")
+                  f"📋 ข้อมูล User\n\n"
+                  f"ชื่อ LINE    : {user.get('display_name', '-')}\n"
+                  f"IUX User ID : {user.get('iux_user_id', '-')}\n"
+                  f"LINE User ID: {user.get('line_user_id', '-')}\n"
+                  f"Status      : {user.get('status', '-')}\n"
+                  f"State       : {user.get('state', '-')}\n"
+                  f"สมัครวันที่ : {created_at[:10] if len(created_at) > 10 else created_at}\n"
+                  f"Verify วันที่: {verified_at[:10] if len(verified_at) > 10 else verified_at}")
         else:
             reply(reply_token, f"❌ ไม่พบ IUX ID: {arg} ในระบบ")
 
