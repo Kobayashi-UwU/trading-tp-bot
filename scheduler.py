@@ -10,11 +10,11 @@ logger = logging.getLogger(__name__)
 
 
 def broadcast_signal(configuration, db) -> None:
-    from signal_gen import generate_signal
+    from signal_gen import generate_gold_analysis
 
     try:
         logger.info("Generating daily signal...")
-        signal = generate_signal()
+        signal = generate_gold_analysis()
     except Exception as e:
         logger.error(f"Signal generation failed: {e}")
         _notify_admin(configuration, db, f"❌ Generate signal ล้มเหลว: {e}")
@@ -67,7 +67,7 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Bangkok"))
     scheduler.add_job(
         broadcast_signal,
-        trigger=CronTrigger(hour=8, minute=0, timezone="Asia/Bangkok"),
+        trigger=CronTrigger(hour=8, minute=0, day_of_week="mon-fri", timezone="Asia/Bangkok"),
         args=[configuration, db],
         id="daily_signal",
         name="Daily Morning Signal",

@@ -10,10 +10,10 @@ load_dotenv()
 
 PAIRS = {
     "XAUUSD": "GC=F",
-    "EURUSD": "EURUSD=X",
-    "GBPUSD": "GBPUSD=X",
-    "USDJPY": "JPY=X",
-    "BTCUSD": "BTC-USD",
+    # "EURUSD": "EURUSD=X",
+    # "GBPUSD": "GBPUSD=X",
+    # "USDJPY": "JPY=X",
+    # "BTCUSD": "BTC-USD",
 }
 
 
@@ -21,12 +21,15 @@ def get_market_data() -> str:
     lines = []
     for name, ticker in PAIRS.items():
         try:
-            df = yf.download(ticker, period="3d", interval="1h", progress=False)
+            df = yf.download(ticker, period="3d",
+                             interval="1h", progress=False)
             if df.empty:
                 continue
             close = df["Close"].dropna()
-            latest = float(close.iloc[-1].iloc[0]) if hasattr(close.iloc[-1], 'iloc') else float(close.iloc[-1])
-            prev = float(close.iloc[-2].iloc[0]) if hasattr(close.iloc[-2], 'iloc') else float(close.iloc[-2])
+            latest = float(
+                close.iloc[-1].iloc[0]) if hasattr(close.iloc[-1], 'iloc') else float(close.iloc[-1])
+            prev = float(
+                close.iloc[-2].iloc[0]) if hasattr(close.iloc[-2], 'iloc') else float(close.iloc[-2])
             change_pct = (latest - prev) / prev * 100
             sign = "+" if change_pct >= 0 else ""
             lines.append(f"  {name}: {latest:.4f}  ({sign}{change_pct:.2f}%)")
@@ -54,9 +57,12 @@ def get_gold_data() -> dict:
     """ดึงข้อมูล XAUUSD แบบละเอียด: H4, H1, M15 + DXY + US10Y"""
     result = {}
     try:
-        df_1h = yf.download("GC=F", period="30d", interval="1h", progress=False)
-        df_15m = yf.download("GC=F", period="5d", interval="15m", progress=False)
-        df_1d = yf.download("GC=F", period="60d", interval="1d", progress=False)
+        df_1h = yf.download("GC=F", period="30d",
+                            interval="1h", progress=False)
+        df_15m = yf.download("GC=F", period="5d",
+                             interval="15m", progress=False)
+        df_1d = yf.download("GC=F", period="60d",
+                            interval="1d", progress=False)
 
         # ── H1 indicators ────────────────────────────────────────────────────
         if not df_1h.empty:
@@ -65,8 +71,10 @@ def get_gold_data() -> dict:
             low = df_1h["Low"].dropna()
 
             result["price"] = _s(close.iloc[-1])
-            result["change_1h"] = (_s(close.iloc[-1]) - _s(close.iloc[-2])) / _s(close.iloc[-2]) * 100
-            result["change_24h"] = (_s(close.iloc[-1]) - _s(close.iloc[-24])) / _s(close.iloc[-24]) * 100 if len(close) >= 24 else 0
+            result["change_1h"] = (
+                _s(close.iloc[-1]) - _s(close.iloc[-2])) / _s(close.iloc[-2]) * 100
+            result["change_24h"] = (_s(close.iloc[-1]) - _s(close.iloc[-24])) / \
+                _s(close.iloc[-24]) * 100 if len(close) >= 24 else 0
 
             result["ema20_1h"] = _s(close.ewm(span=20).mean().iloc[-1])
             result["ema50_1h"] = _s(close.ewm(span=50).mean().iloc[-1])
@@ -125,11 +133,13 @@ def get_gold_data() -> dict:
 
     # ── DXY ──────────────────────────────────────────────────────────────────
     try:
-        dxy = yf.download("DX-Y.NYB", period="3d", interval="1h", progress=False)
+        dxy = yf.download("DX-Y.NYB", period="3d",
+                          interval="1h", progress=False)
         if not dxy.empty:
             dxy_c = dxy["Close"].dropna()
             result["dxy"] = _s(dxy_c.iloc[-1])
-            result["dxy_change_1h"] = (_s(dxy_c.iloc[-1]) - _s(dxy_c.iloc[-2])) / _s(dxy_c.iloc[-2]) * 100
+            result["dxy_change_1h"] = (
+                _s(dxy_c.iloc[-1]) - _s(dxy_c.iloc[-2])) / _s(dxy_c.iloc[-2]) * 100
     except Exception:
         pass
 
@@ -139,7 +149,8 @@ def get_gold_data() -> dict:
         if not tnx.empty:
             tnx_c = tnx["Close"].dropna()
             result["us10y"] = _s(tnx_c.iloc[-1])
-            result["us10y_change_24h"] = _s(tnx_c.iloc[-1]) - _s(tnx_c.iloc[-24]) if len(tnx_c) >= 24 else 0
+            result["us10y_change_24h"] = _s(
+                tnx_c.iloc[-1]) - _s(tnx_c.iloc[-24]) if len(tnx_c) >= 24 else 0
     except Exception:
         pass
 
@@ -151,7 +162,8 @@ def _gemini(prompt: str, max_tokens: int = 800) -> str:
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
     resp = requests.post(
         url,
-        headers={"Content-Type": "application/json", "X-goog-api-key": api_key},
+        headers={"Content-Type": "application/json",
+                 "X-goog-api-key": api_key},
         json={"contents": [{"parts": [{"text": prompt}]}]},
         timeout=30,
     )
@@ -191,8 +203,10 @@ def generate_gold_analysis() -> str:
     def fmt_chg(v, decimals=2):
         return f"+{v:.{decimals}f}%" if v >= 0 else f"{v:.{decimals}f}%"
 
-    macd_trend = "MACD บวก (Bullish momentum)" if data.get("macd_hist", 0) > 0 else "MACD ลบ (Bearish momentum)"
-    macd_accel = "Histogram ขยายตัว (momentum แรงขึ้น)" if abs(data.get("macd_hist", 0)) > abs(data.get("macd_hist_prev", 0)) else "Histogram หดตัว (momentum อ่อนลง)"
+    macd_trend = "MACD บวก (Bullish momentum)" if data.get(
+        "macd_hist", 0) > 0 else "MACD ลบ (Bearish momentum)"
+    macd_accel = "Histogram ขยายตัว (momentum แรงขึ้น)" if abs(data.get("macd_hist", 0)) > abs(
+        data.get("macd_hist_prev", 0)) else "Histogram หดตัว (momentum อ่อนลง)"
     price = data.get("price", 0)
     bb_pos = "ใกล้แนวต้าน Upper BB" if price > data.get("bb_middle", 0) + (data.get("bb_upper", 0) - data.get("bb_middle", 0)) * 0.7 else \
              "ใกล้แนวรับ Lower BB" if price < data.get("bb_middle", 0) - (data.get("bb_middle", 0) - data.get("bb_lower", 0)) * 0.7 else \

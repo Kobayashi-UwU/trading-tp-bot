@@ -98,8 +98,7 @@ def handle_follow(event):
     user_id = event.source.user_id
     display_name = get_display_name(user_id)
     db.upsert_user(user_id, status="new", state="waiting_iux",
-                   display_name=display_name, pending_notified=False,
-                   waiting_iux_hinted=False)
+                   display_name=display_name, pending_notified=False)
     reply(
         event.reply_token,
         "สวัสดีครับ! ยินดีต้อนรับสู่ TradingTP 🎉\n\n"
@@ -160,41 +159,13 @@ def handle_message(event):
 # State handlers
 # ---------------------------------------------------------------------------
 
-_NO_IUX_WORDS = {
-    "ไม่มี", "ยังไม่มี", "ไม่มีครับ", "ไม่มีค่ะ", "ยังไม่มีครับ", "ยังไม่มีค่ะ",
-    "no", "nope", "ไม่ได้มี", "ไม่ได้สมัคร", "ยังไม่ได้สมัคร",
-}
-
-
 def _handle_waiting_iux(user_id: str, text: str, reply_token: str) -> None:
     iux_id = extract_iux_id(text)
     if iux_id:
-        db.upsert_user(user_id, pending_iux_id=iux_id, state="confirming",
-                       waiting_iux_hinted=False)
-        reply(
-            reply_token,
-            f"รับ IUX User ID: {iux_id} ครับ\n\nถูกต้องไหมครับ?\n✅ พิมพ์ 'ใช่'\n❌ พิมพ์ 'ไม่'",
-        )
-    elif text.lower().strip() in _NO_IUX_WORDS:
-        reply(
-            reply_token,
-            "ไม่เป็นไรครับ สมัครฟรีได้เลยที่ลิงค์นี้เลยครับ 👇\n"
-            "https://iux.com/en/register?code=IuyjFrlz\n\n"
-            "สำหรับคนที่มีบัญชี IUX อยู่แล้ว ต้องโอนย้ายก่อนนะครับ\n"
-            "👇👇👇\n"
-            "https://www.iux.com/en/dashboard/ib-transfers-request\n\n"
-            "Partner referral code: IuyjFrlz\n\n"
-            "หลังจากโอนย้ายเสร็จแล้วส่ง IUX User ID มาได้เลยครับ 🙏",
-        )
-    else:
-        user = db.get_user(user_id)
-        if not user or not user.get("waiting_iux_hinted"):
-            db.upsert_user(user_id, waiting_iux_hinted=True)
-            reply(
-                reply_token,
-                "กรุณาส่ง IUX User ID ของคุณครับ\n\n"
-                "💡 IUX User ID คือตัวเลข 6 หรือ 8 หลักที่แสดงอยู่ในหน้า Profile ของ IUX ครับ",
-            )
+        db.upsert_user(user_id, pending_iux_id=iux_id, state="confirming")
+        reply(reply_token,
+              f"IUX User ID: {iux_id} ใช่ไหมครับ? (พิมพ์ ใช่ หรือ ไม่)")
+    # ถ้าไม่มี IUX ID ในข้อความ → เงียบ ไม่ตอบซ้ำ
 
 
 def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) -> None:
@@ -210,14 +181,14 @@ def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) ->
         reply(
             reply_token,
             f"✅ บันทึก IUX ID: {pending} เรียบร้อยครับ\n\n"
-            "⏳ รอ Admin ยืนยันสักครู่นะครับ\n"
-            "เมื่อผ่านแล้วจะได้รับ Signal ทุกเช้า 8:00 น. ครับ 🙏",
+            "⏳ รอ Admin ยืนยันสักครู่นะครับ 🙏",
         )
+        display_name = user.get("display_name") or user_id
         push(
             ADMIN_LINE_USER_ID,
             f"🔔 มี User ใหม่รอยืนยัน!\n\n"
-            f"IUX User ID: {pending}\n"
-            f"LINE User ID: {user_id}\n\n"
+            f"ชื่อ LINE  : {display_name}\n"
+            f"IUX User ID: {pending}\n\n"
             f"✅ ยืนยัน: /verify {pending}\n"
             f"❌ ปฏิเสธ: /reject {pending}",
         )
@@ -302,8 +273,14 @@ def _handle_admin(text: str, reply_token: str) -> None:
             push(
                 user["line_user_id"],
                 "🎉 ยืนยันเรียบร้อยแล้วครับ!\n\n"
-                "คุณจะได้รับ Daily Trading Signal ทุกเช้า 8:00 น.\n"
-                "ขอให้เทรดสำเร็จนะครับ 📈",
+                "กลุ่มไลน์: https://line.me/ti/g2/2qPd6fIG5bY4P04_uKo_0sLKLDvqqTsAILh5Qg?utm_source=invitation&utm_medium=link_copy&utm_campaign=default\n\n"
+                "คุณจะได้รับ Daily Trading Signal ทุกเช้า 8:00 น.📈\n\n"
+                "Pstrategy / Pine Script\n"
+                "https: // github.com/Kobayashi-UwU/trading_tp/tree/main/strategy\n\n"
+                "Prompt\n"
+                "https: // github.com/Kobayashi-UwU/trading_tp/tree/main/prompt\n\n"
+                "Code\n"
+                "https: // github.com/Kobayashi-UwU/trading_tp/tree/main/code",
             )
             reply(reply_token, f"✅ Verified IUX ID: {arg} เรียบร้อยแล้ว")
         else:
