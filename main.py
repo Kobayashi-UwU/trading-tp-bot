@@ -101,11 +101,18 @@ def handle_follow(event):
                    display_name=display_name)
     reply(
         event.reply_token,
-        "สวัสดีครับ! ยินดีต้อนรับสู่ TradingTP Signal Bot 🎉\n\n"
+        "สวัสดีครับ! ยินดีต้อนรับสู่ TradingTP 🎉\n\n"
         "เพื่อรับ Daily Trend ฟรีทุกเช้า 8:00 น. / Prompt หรือ โค้ดต่างๆ\n"
         "กรุณาส่ง IUX User ID ของคุณมาได้เลยครับ\n\n"
         "💡 IUX User ID คือตัวเลข 6 หรือ 8 หลัก\n"
-        "ที่แสดงอยู่ในหน้า Profile ของ IUX ครับ",
+        "ที่แสดงอยู่ในหน้า Profile ของ IUX ครับ\n\n"
+        "หรือหากยังไม่มีบัญชี IUX สามารถสมัครฟรีได้ที่ https://iux.com/en/register?code=IuyjFrlz เลยครับ\n\n"
+        "สำหรับคนที่มีบัญชี iux อยู่แล้ว ต้องโอนย้ายก่อนนะครับตามลิงค์นี้\n"
+        "👇👇👇\n"
+        "https://www.iux.com/en/dashboard/ib-transfers-request\n"
+        "Partner referral code:\n"
+        "IuyjFrlz\n"
+        "หลังจากโอนย้ายเสร็จแล้วแจ้งผมได้เลยครับผม"
     )
 
 
