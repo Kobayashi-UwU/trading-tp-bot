@@ -132,35 +132,27 @@ def handle_message(event):
     text = event.message.text.strip()
     reply_token = event.reply_token
 
-    try:
-        # Admin commands — ไม่ผ่าน flow ปกติ
-        if user_id == ADMIN_LINE_USER_ID:
-            _handle_admin(text, reply_token)
-            return
+    # Admin commands — ไม่ผ่าน flow ปกติ
+    if user_id == ADMIN_LINE_USER_ID:
+        _handle_admin(text, reply_token)
+        return
 
-        user = db.get_user(user_id)
-        if not user:
-            db.upsert_user(user_id, status="new", state="waiting_iux")
-            reply(reply_token, "กรุณาส่ง IUX User ID ของคุณเพื่อรับสิทธิ์ Daily Signal ครับ")
-            return
+    user = db.get_user(user_id)
+    if not user:
+        db.upsert_user(user_id, status="new", state="waiting_iux")
+        reply(reply_token, "กรุณาส่ง IUX User ID ของคุณเพื่อรับสิทธิ์ Daily Signal ครับ")
+        return
 
-        state = user.get("state", "waiting_iux")
+    state = user.get("state", "waiting_iux")
 
-        if state == "waiting_iux":
-            _handle_waiting_iux(user_id, text, reply_token)
+    if state == "waiting_iux":
+        _handle_waiting_iux(user_id, text, reply_token)
 
-        elif state == "confirming":
-            _handle_confirming(user_id, text, reply_token, user)
+    elif state == "confirming":
+        _handle_confirming(user_id, text, reply_token, user)
 
-        elif state == "done":
-            _handle_done(user, reply_token)
-
-    except Exception as e:
-        logger.exception(f"handle_message error for user {user_id}: {e}")
-        try:
-            reply(reply_token, "⚠️ เกิดข้อผิดพลาดชั่วคราว กรุณาลองใหม่อีกครั้งครับ")
-        except Exception:
-            pass
+    elif state == "done":
+        _handle_done(user, reply_token)
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +212,8 @@ def _handle_done(user: dict, reply_token: str) -> None:
     status = user.get("status")
     if status == "pending":
         if not user.get("pending_notified"):
-            reply(reply_token, "⏳ กำลังรอ Admin ยืนยัน IUX User ID ของคุณอยู่ครับ\nจะแจ้งให้ทราบเมื่อผ่านแล้ว 🙏")
+            reply(
+                reply_token, "⏳ กำลังรอ Admin ยืนยัน IUX User ID ของคุณอยู่ครับ\nจะแจ้งให้ทราบเมื่อผ่านแล้ว 🙏")
             db.upsert_user(user["line_user_id"], pending_notified=True)
         return
     if status == "verified":
@@ -421,6 +414,12 @@ def _handle_admin(text: str, reply_token: str) -> None:
             "/dailycheck          — วิเคราะห์ทองคำทันที\n"
             "/broadcast           — broadcast ไปหา verified users\n"
             "/help                — แสดง commands",
+        )
+
+    else:
+        reply(
+            reply_token,
+            "❓ ไม่รู้จัก command นี้ครับ\nพิมพ์ /help เพื่อดูคำสั่งทั้งหมด",
         )
 
 
