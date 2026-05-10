@@ -98,7 +98,7 @@ def handle_follow(event):
     user_id = event.source.user_id
     display_name = get_display_name(user_id)
     db.upsert_user(user_id, status="new", state="waiting_iux",
-                   display_name=display_name)
+                   display_name=display_name, pending_notified=False)
     reply(
         event.reply_token,
         "สวัสดีครับ! ยินดีต้อนรับสู่ TradingTP 🎉\n\n"
