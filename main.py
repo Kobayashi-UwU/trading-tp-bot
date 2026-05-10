@@ -168,7 +168,11 @@ def _handle_waiting_iux(user_id: str, text: str, reply_token: str) -> None:
             f"รับ IUX User ID: {iux_id} ครับ\n\nถูกต้องไหมครับ?\n✅ พิมพ์ 'ใช่'\n❌ พิมพ์ 'ไม่'",
         )
     else:
-        return
+        reply(
+            reply_token,
+            "กรุณาส่ง IUX User ID ของคุณครับ\n\n"
+            "💡 IUX User ID คือตัวเลข 6 หรือ 8 หลักที่แสดงอยู่ในหน้า Profile ของ IUX ครับ",
+        )
 
 
 def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) -> None:
