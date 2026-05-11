@@ -140,7 +140,7 @@ def handle_message(event):
     user = db.get_user(user_id)
     if not user:
         db.upsert_user(user_id, status="new", state="waiting_iux")
-        reply(reply_token, "กรุณาส่ง IUX User ID ของคุณเพื่อรับสิทธิ์ Daily Signal ครับ")
+        reply(reply_token, "กรุณาส่ง IUX User ID ของคุณเพื่อรับสิทธิ์ Daily Signal / Code / Prompt ครับ")
         return
 
     state = user.get("state", "waiting_iux")
