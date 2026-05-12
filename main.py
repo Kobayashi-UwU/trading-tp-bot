@@ -18,7 +18,7 @@ from linebot.v3.webhooks import FollowEvent, MessageEvent, TextMessageContent, U
 
 import facebook_handler
 from db import Database
-from facebook_messenger import fb_send, verify_fb_signature, set_as_primary_receiver
+from facebook_messenger import fb_send, verify_fb_signature
 from scheduler import start_scheduler
 
 load_dotenv()
@@ -140,6 +140,20 @@ def fb_webhook():
                 if text:
                     facebook_handler.handle_fb_message(psid, text, db, configuration)
 
+            elif "pass_thread_control" in event:
+                # Inbox passed thread control to our app — process any pending message
+                new_owner = event["pass_thread_control"].get("new_thread_owner_app_id", "")
+                logger.info("FB pass_thread_control psid=%s new_owner=%s", psid, new_owner)
+
+            elif "take_thread_control" in event:
+                # Another app (inbox) took thread control from us
+                prev_owner = event["take_thread_control"].get("previous_thread_owner_app_id", "")
+                logger.info("FB take_thread_control psid=%s prev_owner=%s", psid, prev_owner)
+
+            elif "request_thread_control" in event:
+                # Secondary receiver is requesting thread control — auto-pass to them (deny)
+                logger.info("FB request_thread_control psid=%s — ignoring", psid)
+
             elif "optin" in event:
                 optin = event["optin"]
                 if optin.get("type") == "notification_messages":
@@ -156,17 +170,19 @@ def health():
 
 @app.route("/setup/facebook", methods=["GET"])
 def setup_facebook():
-    """One-time setup: register this app as Messenger Primary Receiver.
-
-    Call once after deploy: GET https://<your-domain>/setup/facebook
-    Requires FB_APP_ID environment variable.
-    """
+    """Check Facebook page connection and webhook subscription status."""
+    token = os.environ.get("FB_PAGE_ACCESS_TOKEN", "")
     app_id = os.environ.get("FB_APP_ID", "")
-    if not app_id:
-        return {"error": "FB_APP_ID env var not set"}, 400
-    result = set_as_primary_receiver(app_id)
-    logger.info("FB primary receiver setup: %s", result)
-    return result
+    if not token:
+        return {"error": "FB_PAGE_ACCESS_TOKEN not set"}, 400
+
+    import requests as req
+    r = req.get(
+        "https://graph.facebook.com/v20.0/me",
+        params={"fields": "id,name", "access_token": token},
+        timeout=10,
+    )
+    return {"page": r.json(), "fb_app_id_configured": bool(app_id)}
 
 
 # ---------------------------------------------------------------------------
