@@ -10,7 +10,7 @@ from linebot.v3.messaging import (
     TextMessage,
 )
 
-from facebook_messenger import fb_send, fb_send_recurring_opt_in, get_fb_profile
+from facebook_messenger import fb_send, fb_send_recurring_opt_in, get_fb_profile, take_thread_control
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +86,9 @@ def _push_to_user(user: dict, text: str) -> None:
 
 def handle_fb_message(psid: str, text: str, db, configuration=None) -> None:
     """Route an incoming Messenger text message."""
+    # Reclaim thread from inbox/secondary receiver when our app is Primary Receiver
+    take_thread_control(psid)
+
     text = text.strip()
     user = db.get_user(psid, platform=PLATFORM)
 

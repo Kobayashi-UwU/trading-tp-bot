@@ -18,7 +18,7 @@ from linebot.v3.webhooks import FollowEvent, MessageEvent, TextMessageContent, U
 
 import facebook_handler
 from db import Database
-from facebook_messenger import fb_send, verify_fb_signature
+from facebook_messenger import fb_send, verify_fb_signature, set_as_primary_receiver
 from scheduler import start_scheduler
 
 load_dotenv()
@@ -152,6 +152,21 @@ def fb_webhook():
 @app.route("/health", methods=["GET"])
 def health():
     return "OK"
+
+
+@app.route("/setup/facebook", methods=["GET"])
+def setup_facebook():
+    """One-time setup: register this app as Messenger Primary Receiver.
+
+    Call once after deploy: GET https://<your-domain>/setup/facebook
+    Requires FB_APP_ID environment variable.
+    """
+    app_id = os.environ.get("FB_APP_ID", "")
+    if not app_id:
+        return {"error": "FB_APP_ID env var not set"}, 400
+    result = set_as_primary_receiver(app_id)
+    logger.info("FB primary receiver setup: %s", result)
+    return result
 
 
 # ---------------------------------------------------------------------------

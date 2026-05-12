@@ -131,5 +131,5 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
     )
     scheduler.start()
     logger.info(
-        "Scheduler started — Daily signal at 08:00 Bangkok time, Gmail poll every 2 min")
+        "Scheduler started — Daily signal at 08:00 Bangkok time, Gmail poll every 10 min")
     return scheduler

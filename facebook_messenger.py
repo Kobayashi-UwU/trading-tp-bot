@@ -115,6 +115,47 @@ def get_fb_profile(psid: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Handover Protocol
+# ---------------------------------------------------------------------------
+
+def take_thread_control(psid: str) -> bool:
+    """Take thread control back from inbox/secondary receiver.
+
+    Must be called by the Primary Receiver app. Fails silently when our app
+    is not the Primary Receiver (returns False).
+    """
+    if not _is_enabled():
+        return False
+    try:
+        resp = requests.post(
+            f"{_GRAPH_BASE}/me/take_thread_control",
+            params={"access_token": _token()},
+            json={"recipient": {"id": psid}, "metadata": "bot"},
+            timeout=10,
+        )
+        if not resp.ok:
+            logger.debug("take_thread_control failed psid=%s: %s", psid, resp.text)
+        return resp.ok
+    except Exception as e:
+        logger.debug("take_thread_control error: %s", e)
+        return False
+
+
+def set_as_primary_receiver(app_id: str) -> dict:
+    """Register this app as Primary Receiver in Handover Protocol.
+
+    Call once via the /setup/facebook endpoint. Requires FB_APP_ID env var.
+    """
+    resp = requests.post(
+        f"{_GRAPH_BASE}/me/messenger_profile",
+        params={"access_token": _token()},
+        json={"handover_protocol": {"primary_receiver_app_id": app_id}},
+        timeout=10,
+    )
+    return {"status": resp.status_code, "body": resp.json()}
+
+
+# ---------------------------------------------------------------------------
 # Webhook security
 # ---------------------------------------------------------------------------
 
