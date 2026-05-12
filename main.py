@@ -130,7 +130,7 @@ def fb_webhook():
             if "message" in event and not event["message"].get("is_echo"):
                 text = event["message"].get("text", "").strip()
                 if text:
-                    facebook_handler.handle_fb_message(psid, text, db)
+                    facebook_handler.handle_fb_message(psid, text, db, configuration)
 
             elif "optin" in event:
                 optin = event["optin"]

@@ -38,6 +38,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_notified   BOOLEAN DEFAULT FA
 
 -- 2. สร้าง index สำหรับ platform (ต้องรันหลัง ADD COLUMN platform)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS reminder_sent      BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS user_role          TEXT DEFAULT NULL;
+-- user_role: NULL = user ปกติ, 'admin' = admin
 CREATE INDEX IF NOT EXISTS idx_users_platform ON users(platform);
 
 -- 3. เปลี่ยนชื่อ column (รัน 1 ครั้งเท่านั้น — comment ออกหลังรันแล้ว)
@@ -49,3 +51,5 @@ ALTER TABLE users DROP CONSTRAINT users_pkey;
 ALTER TABLE users ADD PRIMARY KEY (platform, user_id);
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS user_role TEXT DEFAULT NULL;
