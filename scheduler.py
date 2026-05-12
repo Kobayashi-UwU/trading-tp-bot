@@ -17,7 +17,7 @@ def broadcast_signal(configuration, db) -> None:
         signal = generate_gold_analysis()
     except Exception as e:
         logger.error(f"Signal generation failed: {e}")
-        _notify_admin(configuration, db, f"❌ Generate signal ล้มเหลว: {e}")
+        _notify_admin(configuration, f"❌ Generate signal ล้มเหลว: {e}")
         return
 
     verified_users = db.get_verified_users()
@@ -25,39 +25,38 @@ def broadcast_signal(configuration, db) -> None:
 
     success, failed = 0, 0
     with ApiClient(configuration) as api_client:
-        api = MessagingApi(api_client)
+        line_api = MessagingApi(api_client)
         for user in verified_users:
+            uid = user["user_id"]
+            platform = user.get("platform", "line")
             try:
-                api.push_message(
-                    PushMessageRequest(
-                        to=user["line_user_id"],
-                        messages=[TextMessage(text=signal)],
+                if platform == "line":
+                    line_api.push_message(
+                        PushMessageRequest(to=uid, messages=[TextMessage(text=signal)])
                     )
-                )
+                elif platform == "facebook":
+                    from facebook_messenger import fb_push
+                    fb_push(uid, signal, user.get("notification_token"))
                 success += 1
             except Exception as e:
-                logger.error(f"Push failed for {user['line_user_id']}: {e}")
+                logger.error(f"Push failed for {uid} ({platform}): {e}")
                 failed += 1
 
     logger.info(f"Broadcast done — success: {success}, failed: {failed}")
     _notify_admin(
         configuration,
-        db,
         f"✅ Broadcast เสร็จแล้ว\nส่งสำเร็จ: {success} คน\nล้มเหลว: {failed} คน",
     )
 
 
-def _notify_admin(configuration, db, message: str) -> None:
+def _notify_admin(configuration, message: str) -> None:
     admin_id = os.environ.get("ADMIN_LINE_USER_ID")
     if not admin_id:
         return
     try:
         with ApiClient(configuration) as api_client:
             MessagingApi(api_client).push_message(
-                PushMessageRequest(
-                    to=admin_id,
-                    messages=[TextMessage(text=message)],
-                )
+                PushMessageRequest(to=admin_id, messages=[TextMessage(text=message)])
             )
     except Exception as e:
         logger.error(f"Admin notify failed: {e}")

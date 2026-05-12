@@ -1,0 +1,128 @@
+import hashlib
+import hmac
+import logging
+import os
+
+import requests
+
+logger = logging.getLogger(__name__)
+
+_GRAPH_BASE = "https://graph.facebook.com/v20.0"
+
+
+def _is_enabled() -> bool:
+    return bool(os.environ.get("FB_PAGE_ACCESS_TOKEN"))
+
+
+def _token() -> str:
+    return os.environ["FB_PAGE_ACCESS_TOKEN"]
+
+
+# ---------------------------------------------------------------------------
+# Outgoing messages
+# ---------------------------------------------------------------------------
+
+def fb_send(psid: str, text: str) -> None:
+    """Send a plain-text message to a Messenger user."""
+    if not _is_enabled():
+        logger.warning("FB_PAGE_ACCESS_TOKEN not set — fb_send skipped")
+        return
+    resp = requests.post(
+        f"{_GRAPH_BASE}/me/messages",
+        params={"access_token": _token()},
+        json={"recipient": {"id": psid}, "message": {"text": text}},
+        timeout=10,
+    )
+    resp.raise_for_status()
+
+
+def fb_send_recurring_opt_in(psid: str) -> None:
+    """Send a 'Notify Me' button so the user can opt in to daily signals."""
+    if not _is_enabled():
+        return
+    payload = {
+        "recipient": {"id": psid},
+        "message": {
+            "attachment": {
+                "type": "template",
+                "payload": {
+                    "template_type": "notification_messages",
+                    "title": "Daily Trading Signal 📈",
+                    "notification_messages_frequency": "DAILY",
+                    "notification_messages_cta_text": "ALLOW_MORE_NOTIFICATIONS",
+                },
+            }
+        },
+    }
+    resp = requests.post(
+        f"{_GRAPH_BASE}/me/messages",
+        params={"access_token": _token()},
+        json=payload,
+        timeout=10,
+    )
+    resp.raise_for_status()
+
+
+def fb_push(psid: str, text: str, notification_token: str | None = None) -> None:
+    """Push a message to a user.
+
+    Uses the Recurring Notifications token when available (works outside the
+    24-hour window). Falls back to a regular send otherwise.
+    """
+    if not _is_enabled():
+        logger.warning("FB_PAGE_ACCESS_TOKEN not set — fb_push skipped")
+        return
+    if notification_token:
+        resp = requests.post(
+            f"{_GRAPH_BASE}/me/messages",
+            params={"access_token": _token()},
+            json={
+                "recipient": {"notification_messages_token": notification_token},
+                "message": {"text": text},
+                "messaging_type": "MESSAGE_TAG",
+                "tag": "NOTIFICATION_MESSAGES",
+            },
+            timeout=10,
+        )
+    else:
+        resp = requests.post(
+            f"{_GRAPH_BASE}/me/messages",
+            params={"access_token": _token()},
+            json={"recipient": {"id": psid}, "message": {"text": text}},
+            timeout=10,
+        )
+    resp.raise_for_status()
+
+
+# ---------------------------------------------------------------------------
+# User profile
+# ---------------------------------------------------------------------------
+
+def get_fb_profile(psid: str) -> str:
+    """Return the user's display name, or empty string on failure."""
+    if not _is_enabled():
+        return ""
+    try:
+        resp = requests.get(
+            f"{_GRAPH_BASE}/{psid}",
+            params={"fields": "name", "access_token": _token()},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return resp.json().get("name", "")
+    except Exception:
+        return ""
+
+
+# ---------------------------------------------------------------------------
+# Webhook security
+# ---------------------------------------------------------------------------
+
+def verify_fb_signature(payload: bytes, signature_header: str) -> bool:
+    """Validate the X-Hub-Signature-256 header sent by Facebook."""
+    secret = os.environ.get("FB_APP_SECRET", "")
+    if not secret:
+        return True  # signature check disabled when secret not configured
+    mac = hmac.new(secret.encode(), payload, hashlib.sha256)
+    expected = "sha256=" + mac.hexdigest()
+    return hmac.compare_digest(expected, signature_header or "")

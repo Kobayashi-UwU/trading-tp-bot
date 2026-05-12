@@ -1,18 +1,48 @@
--- รัน SQL นี้ใน Supabase SQL Editor
--- https://supabase.com/dashboard → SQL Editor
-
+-- ═══════════════════════════════════════════════════════════════
+-- FRESH INSTALL — รันบน DB ใหม่ที่ยังไม่มีตาราง
+-- ═══════════════════════════════════════════════════════════════
 CREATE TABLE IF NOT EXISTS users (
-    line_user_id    TEXT PRIMARY KEY,
-    iux_user_id     TEXT,
-    pending_iux_id  TEXT,
-    status          TEXT DEFAULT 'new',
+    user_id             TEXT        NOT NULL,
+    platform            TEXT        NOT NULL DEFAULT 'line',
+    -- platform: 'line' | 'facebook'
+    iux_user_id         TEXT,
+    pending_iux_id      TEXT,
+    display_name        TEXT,
+    status              TEXT        DEFAULT 'new',
     -- new | pending | verified | rejected | blocked
-    state           TEXT DEFAULT 'waiting_iux',
+    state               TEXT        DEFAULT 'waiting_iux',
     -- waiting_iux | confirming | done
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
-    verified_at     TIMESTAMPTZ
+    pending_notified    BOOLEAN     DEFAULT FALSE,
+    notification_token  TEXT,
+    -- Facebook Recurring Notifications token (FB only)
+    created_at          TIMESTAMPTZ DEFAULT NOW(),
+    verified_at         TIMESTAMPTZ,
+    PRIMARY KEY (platform, user_id)
 );
 
--- Index สำหรับ query by iux_user_id
 CREATE INDEX IF NOT EXISTS idx_users_iux_user_id ON users(iux_user_id);
-CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+CREATE INDEX IF NOT EXISTS idx_users_status      ON users(status);
+CREATE INDEX IF NOT EXISTS idx_users_platform    ON users(platform);
+
+
+-- ═══════════════════════════════════════════════════════════════
+-- MIGRATION — รันบน DB เดิมที่มี line_user_id เป็น PK อยู่แล้ว
+-- (ข้ามส่วนนี้ถ้าเพิ่ง setup ใหม่)
+-- ═══════════════════════════════════════════════════════════════
+
+-- 1. เพิ่ม columns ใหม่ (ต้องรันก่อน step อื่น)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS platform           TEXT NOT NULL DEFAULT 'line';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_token TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name       TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_notified   BOOLEAN DEFAULT FALSE;
+
+-- 2. สร้าง index สำหรับ platform (ต้องรันหลัง ADD COLUMN platform)
+CREATE INDEX IF NOT EXISTS idx_users_platform ON users(platform);
+
+-- 3. เปลี่ยนชื่อ column (รัน 1 ครั้งเท่านั้น — comment ออกหลังรันแล้ว)
+ALTER TABLE users RENAME COLUMN line_user_id TO user_id;
+
+-- 4. เปลี่ยน Primary Key เป็น composite (platform, user_id)
+--    (รัน 1 ครั้งเท่านั้น หลังจาก rename เสร็จแล้ว)
+ALTER TABLE users DROP CONSTRAINT users_pkey;
+ALTER TABLE users ADD PRIMARY KEY (platform, user_id);

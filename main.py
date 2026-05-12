@@ -14,9 +14,11 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     TextMessage,
 )
-from linebot.v3.webhooks import UnfollowEvent, FollowEvent, MessageEvent, TextMessageContent
+from linebot.v3.webhooks import FollowEvent, MessageEvent, TextMessageContent, UnfollowEvent
 
+import facebook_handler
 from db import Database
+from facebook_messenger import fb_send, verify_fb_signature
 from scheduler import start_scheduler
 
 load_dotenv()
@@ -35,7 +37,7 @@ db = Database()
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# LINE helpers
 # ---------------------------------------------------------------------------
 
 def messaging_api() -> MessagingApi:
@@ -44,8 +46,7 @@ def messaging_api() -> MessagingApi:
 
 def reply(reply_token: str, text: str) -> None:
     messaging_api().reply_message(
-        ReplyMessageRequest(reply_token=reply_token,
-                            messages=[TextMessage(text=text)])
+        ReplyMessageRequest(reply_token=reply_token, messages=[TextMessage(text=text)])
     )
 
 
@@ -55,14 +56,32 @@ def push(user_id: str, text: str) -> None:
     )
 
 
+def push_to_user(user: dict, text: str) -> None:
+    """Send a push message to a user on their platform (LINE or Facebook)."""
+    platform = user.get("platform", "line")
+    uid = user["user_id"]
+    if platform == "facebook":
+        fb_send(uid, text)
+    else:
+        push(uid, text)
+
+
 def extract_iux_id(text: str) -> str | None:
     """ดึงตัวเลข 6 หรือ 8 หลักจากข้อความ"""
     matches = re.findall(r"\b(\d{6}|\d{8})\b", text)
     return matches[0] if matches else None
 
 
+def get_display_name(user_id: str) -> str:
+    try:
+        profile = messaging_api().get_profile(user_id)
+        return profile.display_name
+    except Exception:
+        return ""
+
+
 # ---------------------------------------------------------------------------
-# Webhook endpoint
+# LINE webhook
 # ---------------------------------------------------------------------------
 
 @app.route("/webhook", methods=["POST"])
@@ -76,22 +95,60 @@ def webhook():
     return "OK"
 
 
+# ---------------------------------------------------------------------------
+# Facebook Messenger webhook
+# ---------------------------------------------------------------------------
+
+@app.route("/webhook/facebook", methods=["GET"])
+def fb_verify():
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+    if mode == "subscribe" and token == os.environ.get("FB_VERIFY_TOKEN"):
+        logger.info("Facebook webhook verified")
+        return challenge, 200
+    abort(403)
+
+
+@app.route("/webhook/facebook", methods=["POST"])
+def fb_webhook():
+    body = request.get_data()
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    if not verify_fb_signature(body, signature):
+        abort(400)
+
+    data = request.get_json(silent=True) or {}
+    if data.get("object") != "page":
+        return "OK"
+
+    for entry in data.get("entry", []):
+        for event in entry.get("messaging", []):
+            psid = event.get("sender", {}).get("id")
+            if not psid:
+                continue
+
+            if "message" in event and not event["message"].get("is_echo"):
+                text = event["message"].get("text", "").strip()
+                if text:
+                    facebook_handler.handle_fb_message(psid, text, db)
+
+            elif "optin" in event:
+                optin = event["optin"]
+                if optin.get("type") == "notification_messages":
+                    token = optin.get("notification_messages_token", "")
+                    facebook_handler.handle_fb_optin(psid, token, db)
+
+    return "OK"
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return "OK"
 
 
 # ---------------------------------------------------------------------------
-# Event: Follow (user adds the OA)
+# LINE event: Follow
 # ---------------------------------------------------------------------------
-
-def get_display_name(user_id: str) -> str:
-    try:
-        profile = messaging_api().get_profile(user_id)
-        return profile.display_name
-    except Exception:
-        return ""
-
 
 @handler.add(FollowEvent)
 def handle_follow(event):
@@ -109,12 +166,12 @@ def handle_follow(event):
         "👇👇👇\n"
         "https://www.iux.com/en/dashboard/ib-transfers-request\n\n"
         "Partner referral code: IuyjFrlz\n\n"
-        "หลังจากโอนย้ายเสร็จแล้วแจ้งผมได้เลยครับผม"
+        "หลังจากโอนย้ายเสร็จแล้วแจ้งผมได้เลยครับผม",
     )
 
 
 # ---------------------------------------------------------------------------
-# Event: Block (user blocks the OA)
+# LINE event: Unfollow
 # ---------------------------------------------------------------------------
 
 @handler.add(UnfollowEvent)
@@ -123,7 +180,7 @@ def handle_unfollow(event):
 
 
 # ---------------------------------------------------------------------------
-# Event: Message
+# LINE event: Message
 # ---------------------------------------------------------------------------
 
 @handler.add(MessageEvent, message=TextMessageContent)
@@ -132,7 +189,6 @@ def handle_message(event):
     text = event.message.text.strip()
     reply_token = event.reply_token
 
-    # Admin commands — ไม่ผ่าน flow ปกติ
     if user_id == ADMIN_LINE_USER_ID:
         _handle_admin(text, reply_token)
         return
@@ -144,28 +200,23 @@ def handle_message(event):
         return
 
     state = user.get("state", "waiting_iux")
-
     if state == "waiting_iux":
         _handle_waiting_iux(user_id, text, reply_token)
-
     elif state == "confirming":
         _handle_confirming(user_id, text, reply_token, user)
-
     elif state == "done":
         _handle_done(user, reply_token)
 
 
 # ---------------------------------------------------------------------------
-# State handlers
+# LINE state handlers
 # ---------------------------------------------------------------------------
 
 def _handle_waiting_iux(user_id: str, text: str, reply_token: str) -> None:
     iux_id = extract_iux_id(text)
     if iux_id:
         db.upsert_user(user_id, pending_iux_id=iux_id, state="confirming")
-        reply(reply_token,
-              f"IUX User ID: {iux_id} ใช่ไหมครับ? (พิมพ์ ใช่ หรือ ไม่)")
-    # ถ้าไม่มี IUX ID ในข้อความ → เงียบ ไม่ตอบซ้ำ
+        reply(reply_token, f"IUX User ID: {iux_id} ใช่ไหมครับ? (พิมพ์ ใช่ หรือ ไม่)")
 
 
 def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) -> None:
@@ -183,7 +234,7 @@ def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) ->
             f"✅ บันทึก IUX ID: {pending} เรียบร้อยครับ\n\n"
             "⏳ รอ Admin ยืนยันสักครู่นะครับ 🙏",
         )
-        display_name = user.get("display_name") or user_id
+        display_name = user.get("display_name") or get_display_name(user_id) or user_id
         push(
             ADMIN_LINE_USER_ID,
             f"🔔 มี User ใหม่รอยืนยัน!\n\n"
@@ -206,14 +257,18 @@ def _handle_done(user: dict, reply_token: str) -> None:
     if status == "pending":
         if not user.get("pending_notified"):
             reply(
-                reply_token, "⏳ กำลังรอ Admin ยืนยัน IUX User ID ของคุณอยู่ครับ\nจะแจ้งให้ทราบเมื่อผ่านแล้ว 🙏")
-            db.upsert_user(user["line_user_id"], pending_notified=True)
+                reply_token,
+                "⏳ กำลังรอ Admin ยืนยัน IUX User ID ของคุณอยู่ครับ\nจะแจ้งให้ทราบเมื่อผ่านแล้ว 🙏",
+            )
+            db.upsert_user(user["user_id"], pending_notified=True)
         return
     if status == "verified":
-        return  # verified แล้วไม่จำเป็นต้องตอบทุก message
+        return
     elif status == "rejected":
-        db.upsert_user(user["line_user_id"], status="new", state="waiting_iux",
-                       iux_user_id=None, pending_iux_id=None, pending_notified=False)
+        db.upsert_user(
+            user["user_id"], status="new", state="waiting_iux",
+            iux_user_id=None, pending_iux_id=None, pending_notified=False,
+        )
         reply(
             reply_token,
             "❌ IUX User ID ไม่ผ่านการยืนยันครับ\n\n"
@@ -225,6 +280,20 @@ def _handle_done(user: dict, reply_token: str) -> None:
 # ---------------------------------------------------------------------------
 # Admin command handler
 # ---------------------------------------------------------------------------
+
+_VERIFY_MSG = (
+    "🎉 ยืนยันเรียบร้อยแล้วครับ!\n\n"
+    "กลุ่มไลน์: https://line.me/ti/g2/2qPd6fIG5bY4P04_uKo_0sLKLDvqqTsAILh5Qg"
+    "?utm_source=invitation&utm_medium=link_copy&utm_campaign=default\n\n"
+    "คุณจะได้รับ Daily Trading Signal ทุกเช้า 8:00 น.📈\n\n"
+    "Strategy / Pine Script\n"
+    "https://github.com/Kobayashi-UwU/trading_tp/tree/main/strategy\n\n"
+    "Prompt\n"
+    "https://github.com/Kobayashi-UwU/trading_tp/tree/main/prompt\n\n"
+    "Code\n"
+    "https://github.com/Kobayashi-UwU/trading_tp/tree/main/code"
+)
+
 
 def _handle_admin(text: str, reply_token: str) -> None:
     parts = text.strip().split(None, 1)
@@ -255,7 +324,9 @@ def _handle_admin(text: str, reply_token: str) -> None:
             existing = db.get_user_by_iux_id(iux_id)
             if existing:
                 reply(
-                    reply_token, f"⚠️ IUX ID: {iux_id} มีในระบบแล้ว (status: {existing.get('status')})")
+                    reply_token,
+                    f"⚠️ IUX ID: {iux_id} มีในระบบแล้ว (status: {existing.get('status')})",
+                )
             else:
                 fake_line_id = f"MANUAL_{iux_id}"
                 db.upsert_user(fake_line_id, iux_user_id=iux_id, status="pending",
@@ -267,35 +338,27 @@ def _handle_admin(text: str, reply_token: str) -> None:
             reply(reply_token, f"❌ Error: {str(e)}")
 
     elif cmd in ("/verify", "/vertify") and arg:
-        user = db.get_user_by_iux_id(arg)
-        if user:
-            db.upsert_user(user["line_user_id"], status="verified")
-            push(
-                user["line_user_id"],
-                "🎉 ยืนยันเรียบร้อยแล้วครับ!\n\n"
-                "กลุ่มไลน์: https://line.me/ti/g2/2qPd6fIG5bY4P04_uKo_0sLKLDvqqTsAILh5Qg?utm_source=invitation&utm_medium=link_copy&utm_campaign=default\n\n"
-                "คุณจะได้รับ Daily Trading Signal ทุกเช้า 8:00 น.📈\n\n"
-                "Pstrategy / Pine Script\n"
-                "https: // github.com/Kobayashi-UwU/trading_tp/tree/main/strategy\n\n"
-                "Prompt\n"
-                "https: // github.com/Kobayashi-UwU/trading_tp/tree/main/prompt\n\n"
-                "Code\n"
-                "https: // github.com/Kobayashi-UwU/trading_tp/tree/main/code",
-            )
-            reply(reply_token, f"✅ Verified IUX ID: {arg} เรียบร้อยแล้ว")
+        users = db.get_all_users_by_iux_id(arg)
+        if users:
+            for u in users:
+                db.upsert_user(u["user_id"], platform=u["platform"], status="verified")
+                push_to_user(u, _VERIFY_MSG)
+            platforms = ", ".join(u["platform"] for u in users)
+            reply(reply_token, f"✅ Verified IUX ID: {arg} ({platforms})")
         else:
             reply(reply_token, f"❌ ไม่พบ IUX ID: {arg} ในระบบ")
 
     elif cmd == "/reject" and arg:
-        user = db.get_user_by_iux_id(arg)
-        if user:
-            db.upsert_user(user["line_user_id"], status="rejected")
-            push(
-                user["line_user_id"],
-                "❌ IUX User ID ไม่ผ่านการยืนยันครับ\n\n"
-                "กรุณาตรวจสอบว่าสมัคร IUX ผ่าน affiliate link ของ TradingTP\n"
-                "แล้วส่ง ID มาใหม่ได้เลยครับ 🙏",
-            )
+        users = db.get_all_users_by_iux_id(arg)
+        if users:
+            for u in users:
+                db.upsert_user(u["user_id"], platform=u["platform"], status="rejected")
+                push_to_user(
+                    u,
+                    "❌ IUX User ID ไม่ผ่านการยืนยันครับ\n\n"
+                    "กรุณาตรวจสอบว่าสมัคร IUX ผ่าน affiliate link ของ TradingTP\n"
+                    "แล้วส่ง ID มาใหม่ได้เลยครับ 🙏",
+                )
             reply(reply_token, f"❌ Rejected IUX ID: {arg}")
         else:
             reply(reply_token, f"❌ ไม่พบ IUX ID: {arg} ในระบบ")
@@ -303,13 +366,12 @@ def _handle_admin(text: str, reply_token: str) -> None:
     elif cmd == "/update" and arg:
         parts_arg = arg.split()
         if len(parts_arg) != 2:
-            reply(
-                reply_token, "❌ รูปแบบไม่ถูกต้อง\nใช้: /update [iux_id_เก่า] [iux_id_ใหม่]")
+            reply(reply_token, "❌ รูปแบบไม่ถูกต้อง\nใช้: /update [iux_id_เก่า] [iux_id_ใหม่]")
             return
         old_id, new_id = parts_arg
         user = db.get_user_by_iux_id(old_id)
         if user:
-            db.update_iux_id(user["line_user_id"], new_id)
+            db.update_iux_id(user["user_id"], new_id, platform=user.get("platform", "line"))
             reply(reply_token,
                   f"✅ อัปเดต IUX ID เรียบร้อย\n"
                   f"เก่า: {old_id}\n"
@@ -326,10 +388,11 @@ def _handle_admin(text: str, reply_token: str) -> None:
                 lines.append(
                     f"👤 {u.get('display_name', '?')}\n"
                     f"   IUX: {u.get('iux_user_id', '-')}\n"
+                    f"   Platform: {u.get('platform', '-')}\n"
                     f"   Status: {u.get('status', '-')}"
                 )
-            reply(
-                reply_token, f"🔍 ค้นหา '{arg}' พบ {len(users)} คน\n\n" + "\n\n".join(lines))
+            reply(reply_token,
+                  f"🔍 ค้นหา '{arg}' พบ {len(users)} คน\n\n" + "\n\n".join(lines))
         else:
             reply(reply_token, f"❌ ไม่พบชื่อที่ค้นหา: '{arg}'")
 
@@ -340,12 +403,13 @@ def _handle_admin(text: str, reply_token: str) -> None:
             created_at = user.get("created_at", "-") or "-"
             reply(reply_token,
                   f"📋 ข้อมูล User\n\n"
-                  f"ชื่อ LINE    : {user.get('display_name', '-')}\n"
-                  f"IUX User ID : {user.get('iux_user_id', '-')}\n"
-                  f"LINE User ID: {user.get('line_user_id', '-')}\n"
-                  f"Status      : {user.get('status', '-')}\n"
-                  f"State       : {user.get('state', '-')}\n"
-                  f"สมัครวันที่ : {created_at[:10] if len(created_at) > 10 else created_at}\n"
+                  f"ชื่อ         : {user.get('display_name', '-')}\n"
+                  f"IUX User ID  : {user.get('iux_user_id', '-')}\n"
+                  f"Platform     : {user.get('platform', '-')}\n"
+                  f"User ID      : {user.get('user_id', '-')}\n"
+                  f"Status       : {user.get('status', '-')}\n"
+                  f"State        : {user.get('state', '-')}\n"
+                  f"สมัครวันที่  : {created_at[:10] if len(created_at) > 10 else created_at}\n"
                   f"Verify วันที่: {verified_at[:10] if len(verified_at) > 10 else verified_at}")
         else:
             reply(reply_token, f"❌ ไม่พบ IUX ID: {arg} ในระบบ")
@@ -353,7 +417,7 @@ def _handle_admin(text: str, reply_token: str) -> None:
     elif cmd == "/reset" and arg:
         user = db.get_user_by_iux_id(arg)
         if user:
-            db.reset_user(user["line_user_id"])
+            db.reset_user(user["user_id"], platform=user.get("platform", "line"))
             reply(reply_token, f"🔄 Reset user IUX ID: {arg} แล้ว")
         else:
             reply(reply_token, f"❌ ไม่พบ IUX ID: {arg}")
@@ -362,12 +426,15 @@ def _handle_admin(text: str, reply_token: str) -> None:
         users = db.get_all_users()
         verified = [u for u in users if u["status"] == "verified"]
         pending = [u for u in users if u["status"] == "pending"]
+        line_v = sum(1 for u in verified if u.get("platform") == "line")
+        fb_v = sum(1 for u in verified if u.get("platform") == "facebook")
         pending_str = "\n".join(
-            f"  • {u['iux_user_id']}" for u in pending) or "  (ไม่มี)"
+            f"  • {u['iux_user_id']} [{u.get('platform', 'line')}]" for u in pending
+        ) or "  (ไม่มี)"
         reply(
             reply_token,
             f"📊 สรุป Users ทั้งหมด\n\n"
-            f"✅ Verified: {len(verified)} คน\n"
+            f"✅ Verified: {len(verified)} คน (LINE: {line_v}, FB: {fb_v})\n"
             f"⏳ Pending: {len(pending)} คน\n"
             f"👥 Total: {len(users)} คน\n\n"
             f"Pending IDs:\n{pending_str}",
@@ -402,12 +469,12 @@ def _handle_admin(text: str, reply_token: str) -> None:
             "📋 Admin Commands:\n\n"
             "/verifyme [IUX_ID]    — ลงทะเบียนตัวเองเป็น verified user\n"
             "/addpending [ID]      — เพิ่ม IUX ID เข้าระบบ (manual)\n"
-            "/verify [ID]          — ยืนยัน user\n"
-            "/reject [ID]          — ปฏิเสธ user\n"
+            "/verify [ID]          — ยืนยัน user (ทุก platform)\n"
+            "/reject [ID]          — ปฏิเสธ user (ทุก platform)\n"
             "/update [เก่า] [ใหม่]  — แก้ IUX ID ของ user\n"
             "/reset [ID]           — reset ให้ user ส่ง ID ใหม่\n"
             "/info [ID]            — ดูข้อมูล user\n"
-            "/findname [ชื่อ]       — ค้นหา user จากชื่อ LINE\n"
+            "/findname [ชื่อ]       — ค้นหา user จากชื่อ\n"
             "/list                 — ดู users ทั้งหมด\n"
             "/signal              — generate signal ให้ตัวเอง\n"
             "/dailycheck          — วิเคราะห์ทองคำทันที\n"
@@ -416,10 +483,7 @@ def _handle_admin(text: str, reply_token: str) -> None:
         )
 
     else:
-        reply(
-            reply_token,
-            "❓ ไม่รู้จัก command นี้ครับ\nพิมพ์ /help เพื่อดูคำสั่งทั้งหมด",
-        )
+        reply(reply_token, "❓ ไม่รู้จัก command นี้ครับ\nพิมพ์ /help เพื่อดูคำสั่งทั้งหมด")
 
 
 # ---------------------------------------------------------------------------
