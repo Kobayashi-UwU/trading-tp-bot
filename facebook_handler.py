@@ -120,24 +120,40 @@ def _handle_waiting_iux(psid: str, text: str, db) -> None:
 def _handle_confirming(psid: str, text: str, db, user: dict) -> None:
     if text.lower() in _YES_WORDS:
         pending = user.get("pending_iux_id")
-        db.upsert_user(
-            psid, platform=PLATFORM,
-            iux_user_id=pending, pending_iux_id=None,
-            status="pending", state="done", pending_notified=True,
+
+        # ถ้า IUX ID นี้ verified บน platform อื่นอยู่แล้ว → verify ทันทีไม่ต้องรอ email
+        existing = db.get_all_users_by_iux_id(pending)
+        already_verified = any(
+            u.get("status") == "verified" and u.get("user_id") != psid
+            for u in existing
         )
-        fb_send(
-            psid,
-            f"✅ บันทึก IUX ID: {pending} เรียบร้อยครับ\n\n"
-            "⏳ รอ Admin ยืนยันสักครู่นะครับ 🙏",
-        )
-        display_name = user.get("display_name") or get_fb_profile(psid) or psid
-        _push_line_admin(
-            f"🔔 มี User ใหม่รอยืนยัน! [Facebook]\n\n"
-            f"ชื่อ Facebook: {display_name}\n"
-            f"IUX User ID : {pending}\n\n"
-            f"✅ ยืนยัน: /verify {pending}\n"
-            f"❌ ปฏิเสธ: /reject {pending}",
-        )
+
+        if already_verified:
+            db.upsert_user(
+                psid, platform=PLATFORM,
+                iux_user_id=pending, pending_iux_id=None,
+                status="verified", state="done", pending_notified=True,
+            )
+            fb_send(psid, _VERIFY_MESSAGE)
+        else:
+            db.upsert_user(
+                psid, platform=PLATFORM,
+                iux_user_id=pending, pending_iux_id=None,
+                status="pending", state="done", pending_notified=True,
+            )
+            fb_send(
+                psid,
+                f"✅ บันทึก IUX ID: {pending} เรียบร้อยครับ\n\n"
+                "⏳ รอ Admin ยืนยันสักครู่นะครับ 🙏",
+            )
+            display_name = user.get("display_name") or get_fb_profile(psid) or psid
+            _push_line_admin(
+                f"🔔 มี User ใหม่รอยืนยัน! [Facebook]\n\n"
+                f"ชื่อ Facebook: {display_name}\n"
+                f"IUX User ID : {pending}\n\n"
+                f"✅ ยืนยัน: /verify {pending}\n"
+                f"❌ ปฏิเสธ: /reject {pending}",
+            )
 
     elif text.lower() in _NO_WORDS:
         db.upsert_user(psid, platform=PLATFORM, pending_iux_id=None, state="waiting_iux")

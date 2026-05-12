@@ -226,23 +226,37 @@ def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) ->
 
     if text.lower() in yes_words:
         pending = user.get("pending_iux_id")
-        db.upsert_user(user_id, iux_user_id=pending,
-                       pending_iux_id=None, status="pending", state="done",
-                       pending_notified=True)
-        reply(
-            reply_token,
-            f"✅ บันทึก IUX ID: {pending} เรียบร้อยครับ\n\n"
-            "⏳ รอ Admin ยืนยันสักครู่นะครับ 🙏",
+
+        # ถ้า IUX ID นี้ verified บน platform อื่นอยู่แล้ว → verify ทันทีไม่ต้องรอ email
+        existing = db.get_all_users_by_iux_id(pending)
+        already_verified = any(
+            u.get("status") == "verified" and u.get("user_id") != user_id
+            for u in existing
         )
-        display_name = user.get("display_name") or get_display_name(user_id) or user_id
-        push(
-            ADMIN_LINE_USER_ID,
-            f"🔔 มี User ใหม่รอยืนยัน!\n\n"
-            f"ชื่อ LINE  : {display_name}\n"
-            f"IUX User ID: {pending}\n\n"
-            f"✅ ยืนยัน: /verify {pending}\n"
-            f"❌ ปฏิเสธ: /reject {pending}",
-        )
+
+        if already_verified:
+            db.upsert_user(user_id, iux_user_id=pending,
+                           pending_iux_id=None, status="verified", state="done",
+                           pending_notified=True)
+            reply(reply_token, _VERIFY_MSG)
+        else:
+            db.upsert_user(user_id, iux_user_id=pending,
+                           pending_iux_id=None, status="pending", state="done",
+                           pending_notified=True)
+            reply(
+                reply_token,
+                f"✅ บันทึก IUX ID: {pending} เรียบร้อยครับ\n\n"
+                "⏳ รอ Admin ยืนยันสักครู่นะครับ 🙏",
+            )
+            display_name = user.get("display_name") or get_display_name(user_id) or user_id
+            push(
+                ADMIN_LINE_USER_ID,
+                f"🔔 มี User ใหม่รอยืนยัน!\n\n"
+                f"ชื่อ LINE  : {display_name}\n"
+                f"IUX User ID: {pending}\n\n"
+                f"✅ ยืนยัน: /verify {pending}\n"
+                f"❌ ปฏิเสธ: /reject {pending}",
+            )
 
     elif text.lower() in no_words:
         db.upsert_user(user_id, pending_iux_id=None, state="waiting_iux")
