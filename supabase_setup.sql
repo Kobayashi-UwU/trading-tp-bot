@@ -37,6 +37,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name       TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_notified   BOOLEAN DEFAULT FALSE;
 
 -- 2. สร้าง index สำหรับ platform (ต้องรันหลัง ADD COLUMN platform)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reminder_sent      BOOLEAN DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_users_platform ON users(platform);
 
 -- 3. เปลี่ยนชื่อ column (รัน 1 ครั้งเท่านั้น — comment ออกหลังรันแล้ว)
@@ -46,3 +47,5 @@ ALTER TABLE users RENAME COLUMN line_user_id TO user_id;
 --    (รัน 1 ครั้งเท่านั้น หลังจาก rename เสร็จแล้ว)
 ALTER TABLE users DROP CONSTRAINT users_pkey;
 ALTER TABLE users ADD PRIMARY KEY (platform, user_id);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE;

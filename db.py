@@ -66,6 +66,20 @@ class Database:
         )
         return result.data
 
+    def get_long_pending_users(self, hours: int = 12) -> list[dict]:
+        """Return pending users waiting longer than `hours` who haven't been reminded yet."""
+        from datetime import timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        result = (
+            self.client.table(self.table)
+            .select("*")
+            .eq("status", "pending")
+            .eq("reminder_sent", False)
+            .lt("created_at", cutoff)
+            .execute()
+        )
+        return result.data
+
     def search_by_name(self, keyword: str) -> list[dict]:
         result = (
             self.client.table(self.table)
