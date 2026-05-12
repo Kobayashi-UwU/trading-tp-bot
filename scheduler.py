@@ -112,7 +112,7 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
     scheduler.add_job(
         poll_new_iux_emails,
         trigger="interval",
-        minutes=10,
+        minutes=2,
         args=[configuration, db],
         id="gmail_poll",
         name="Gmail IUX Auto-Verify",
@@ -128,5 +128,5 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
         replace_existing=True,
     )
     scheduler.start()
-    logger.info("Scheduler started — Daily signal at 08:00 Bangkok time, Gmail poll every 10 min")
+    logger.info("Scheduler started — Daily signal at 08:00 Bangkok time, Gmail poll every 2 min")
     return scheduler

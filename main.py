@@ -460,10 +460,19 @@ def _handle_admin(text: str, reply_token: str) -> None:
 
     elif cmd == "/autoverifynow":
         reply(reply_token, "⏳ กำลังเช็ค email จาก IUX ทันที...")
-        from gmail_poller import poll_new_iux_emails
+        from gmail_poller import poll_all_iux_emails
         try:
-            poll_new_iux_emails(configuration, db)
-            push(ADMIN_LINE_USER_ID, "✅ เช็ค email เสร็จแล้ว (ดู log สำหรับรายละเอียด)")
+            verified = poll_all_iux_emails(configuration, db)
+            if verified:
+                lines = "\n".join(
+                    f"{i+1}. IUX ID: {v['iux_id']}  ชื่อ {v['platform'].upper()}: {v['display_name']}"
+                    for i, v in enumerate(verified)
+                )
+                push(ADMIN_LINE_USER_ID,
+                     f"✅ เช็ค email เสร็จแล้ว\n\n"
+                     f"User ใหม่ที่ verify แล้ว:\n{lines}")
+            else:
+                push(ADMIN_LINE_USER_ID, "✅ เช็ค email เสร็จแล้ว\nไม่พบ user ใหม่ที่รอ verify")
         except Exception as e:
             push(ADMIN_LINE_USER_ID, f"❌ Auto-verify ล้มเหลว: {e}")
 

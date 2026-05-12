@@ -83,10 +83,10 @@ def _notify_admin(configuration, message: str) -> None:
         logger.error(f"Admin notify failed: {e}")
 
 
-def poll_new_iux_emails(configuration, db) -> None:
-    """Poll Gmail for unread IUX referral emails and auto-verify matching users."""
+def _poll_iux_emails(configuration, db, unseen_only: bool) -> list[dict]:
+    """Core polling logic. If unseen_only=True, fetch only unread emails and mark them read."""
     if not _is_enabled():
-        return
+        return []
 
     address = os.environ["GMAIL_ADDRESS"]
     app_password = os.environ["GMAIL_APP_PASSWORD"]
@@ -96,17 +96,20 @@ def poll_new_iux_emails(configuration, db) -> None:
         mail.login(address, app_password)
     except Exception as e:
         logger.error(f"Gmail IMAP login failed: {e}")
-        return
+        return []
+
+    verified_results: list[dict] = []
 
     try:
         mail.select("INBOX")
-        _, data = mail.search(None, f'FROM "{_IUX_SENDER}"')
+        criteria = f'(UNSEEN FROM "{_IUX_SENDER}")' if unseen_only else f'FROM "{_IUX_SENDER}"'
+        _, data = mail.search(None, criteria)
         email_ids = data[0].split() if data[0] else []
 
         if not email_ids:
-            return
+            return []
 
-        logger.info(f"Found {len(email_ids)} unread IUX email(s)")
+        logger.info(f"Found {len(email_ids)} IUX email(s) (unseen_only={unseen_only})")
 
         for eid in email_ids:
             try:
@@ -118,6 +121,8 @@ def poll_new_iux_emails(configuration, db) -> None:
 
                 if not iux_id:
                     logger.warning(f"No IUX User ID found in email {eid}")
+                    if unseen_only:
+                        mail.store(eid, "+FLAGS", "\\Seen")
                     continue
 
                 logger.info(f"IUX email — User ID: {iux_id}")
@@ -126,7 +131,8 @@ def poll_new_iux_emails(configuration, db) -> None:
 
                 if not pending:
                     logger.info(f"IUX ID {iux_id} not found as pending — skipping")
-                    mail.store(eid, "+FLAGS", "\\Seen")
+                    if unseen_only:
+                        mail.store(eid, "+FLAGS", "\\Seen")
                     continue
 
                 for u in pending:
@@ -135,13 +141,14 @@ def poll_new_iux_emails(configuration, db) -> None:
                         _push_user(u, _VERIFY_MSG, configuration)
                     except Exception as e:
                         logger.error(f"Push failed for {u['user_id']}: {e}")
+                    verified_results.append({
+                        "iux_id": iux_id,
+                        "display_name": u.get("display_name") or "-",
+                        "platform": u.get("platform", "line"),
+                    })
 
-                platforms = ", ".join(u["platform"] for u in pending)
-                _notify_admin(
-                    configuration,
-                    f"✅ Auto-verified IUX ID: {iux_id} ({platforms})\n"
-                    f"จาก email IUX ที่เพิ่งเข้ามา",
-                )
+                if unseen_only:
+                    mail.store(eid, "+FLAGS", "\\Seen")
                 logger.info(f"Auto-verified IUX ID: {iux_id} for {len(pending)} user(s)")
 
             except Exception as e:
@@ -152,3 +159,15 @@ def poll_new_iux_emails(configuration, db) -> None:
             mail.logout()
         except Exception:
             pass
+
+    return verified_results
+
+
+def poll_new_iux_emails(configuration, db) -> list[dict]:
+    """Scheduled job: check only UNSEEN emails, mark as read after processing."""
+    return _poll_iux_emails(configuration, db, unseen_only=True)
+
+
+def poll_all_iux_emails(configuration, db) -> list[dict]:
+    """Manual trigger (/autoverifynow): scan ALL emails from IUX regardless of read status."""
+    return _poll_iux_emails(configuration, db, unseen_only=False)
