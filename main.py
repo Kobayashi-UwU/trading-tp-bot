@@ -113,11 +113,16 @@ def fb_verify():
 @app.route("/webhook/facebook", methods=["POST"])
 def fb_webhook():
     body = request.get_data()
+    logger.info("FB webhook POST received, body_len=%d", len(body))
+
     signature = request.headers.get("X-Hub-Signature-256", "")
     if not verify_fb_signature(body, signature):
+        logger.warning("FB webhook signature mismatch — rejected")
         abort(400)
 
     data = request.get_json(silent=True) or {}
+    logger.info("FB webhook payload object=%s entries=%d", data.get("object"), len(data.get("entry", [])))
+
     if data.get("object") != "page":
         return "OK"
 
@@ -127,8 +132,11 @@ def fb_webhook():
             if not psid:
                 continue
 
+            logger.info("FB event psid=%s keys=%s", psid, list(event.keys()))
+
             if "message" in event and not event["message"].get("is_echo"):
                 text = event["message"].get("text", "").strip()
+                logger.info("FB message psid=%s text=%r", psid, text)
                 if text:
                     facebook_handler.handle_fb_message(psid, text, db, configuration)
 

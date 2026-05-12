@@ -32,7 +32,8 @@ def broadcast_signal(configuration, db) -> None:
             try:
                 if platform == "line":
                     line_api.push_message(
-                        PushMessageRequest(to=uid, messages=[TextMessage(text=signal)])
+                        PushMessageRequest(to=uid, messages=[
+                                           TextMessage(text=signal)])
                     )
                 elif platform == "facebook":
                     from facebook_messenger import fb_push
@@ -73,7 +74,8 @@ def send_pending_reminders(configuration, db) -> None:
             try:
                 if platform == "line":
                     line_api.push_message(
-                        PushMessageRequest(to=uid, messages=[TextMessage(text=_REMINDER_MSG)])
+                        PushMessageRequest(to=uid, messages=[
+                                           TextMessage(text=_REMINDER_MSG)])
                     )
                 elif platform == "facebook":
                     from facebook_messenger import fb_send
@@ -83,15 +85,14 @@ def send_pending_reminders(configuration, db) -> None:
             except Exception as e:
                 logger.error(f"Reminder failed for {uid}: {e}")
 
-
-
     admin_id = os.environ.get("ADMIN_LINE_USER_ID")
     if not admin_id:
         return
     try:
         with ApiClient(configuration) as api_client:
             MessagingApi(api_client).push_message(
-                PushMessageRequest(to=admin_id, messages=[TextMessage(text=message)])
+                PushMessageRequest(to=admin_id, messages=[
+                                   TextMessage(text=message)])
             )
     except Exception as e:
         logger.error(f"Admin notify failed: {e}")
@@ -103,7 +104,8 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Bangkok"))
     scheduler.add_job(
         broadcast_signal,
-        trigger=CronTrigger(hour=8, minute=0, day_of_week="mon-fri", timezone="Asia/Bangkok"),
+        trigger=CronTrigger(
+            hour=8, minute=0, day_of_week="mon-fri", timezone="Asia/Bangkok"),
         args=[configuration, db],
         id="daily_signal",
         name="Daily Morning Signal",
@@ -112,7 +114,7 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
     scheduler.add_job(
         poll_new_iux_emails,
         trigger="interval",
-        minutes=2,
+        minutes=10,
         args=[configuration, db],
         id="gmail_poll",
         name="Gmail IUX Auto-Verify",
@@ -128,5 +130,6 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
         replace_existing=True,
     )
     scheduler.start()
-    logger.info("Scheduler started — Daily signal at 08:00 Bangkok time, Gmail poll every 2 min")
+    logger.info(
+        "Scheduler started — Daily signal at 08:00 Bangkok time, Gmail poll every 2 min")
     return scheduler
