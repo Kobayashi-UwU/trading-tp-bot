@@ -63,6 +63,8 @@ def _notify_admin(configuration, message: str) -> None:
 
 
 def start_scheduler(configuration, db) -> BackgroundScheduler:
+    from gmail_poller import poll_new_iux_emails
+
     scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Bangkok"))
     scheduler.add_job(
         broadcast_signal,
@@ -72,6 +74,15 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
         name="Daily Morning Signal",
         replace_existing=True,
     )
+    scheduler.add_job(
+        poll_new_iux_emails,
+        trigger="interval",
+        minutes=2,
+        args=[configuration, db],
+        id="gmail_poll",
+        name="Gmail IUX Auto-Verify",
+        replace_existing=True,
+    )
     scheduler.start()
-    logger.info("Scheduler started — Daily signal at 08:00 Bangkok time")
+    logger.info("Scheduler started — Daily signal at 08:00 Bangkok time, Gmail poll every 2 min")
     return scheduler
