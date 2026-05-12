@@ -100,7 +100,7 @@ def poll_new_iux_emails(configuration, db) -> None:
 
     try:
         mail.select("INBOX")
-        _, data = mail.search(None, f'(UNSEEN FROM "{_IUX_SENDER}")')
+        _, data = mail.search(None, f'FROM "{_IUX_SENDER}"')
         email_ids = data[0].split() if data[0] else []
 
         if not email_ids:
@@ -118,7 +118,6 @@ def poll_new_iux_emails(configuration, db) -> None:
 
                 if not iux_id:
                     logger.warning(f"No IUX User ID found in email {eid}")
-                    mail.store(eid, "+FLAGS", "\\Seen")
                     continue
 
                 logger.info(f"IUX email — User ID: {iux_id}")
@@ -147,8 +146,6 @@ def poll_new_iux_emails(configuration, db) -> None:
 
             except Exception as e:
                 logger.error(f"Error processing email {eid}: {e}")
-            finally:
-                mail.store(eid, "+FLAGS", "\\Seen")
 
     finally:
         try:

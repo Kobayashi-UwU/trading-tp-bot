@@ -458,6 +458,15 @@ def _handle_admin(text: str, reply_token: str) -> None:
         except Exception as e:
             push(ADMIN_LINE_USER_ID, f"❌ วิเคราะห์ทองไม่สำเร็จ: {e}")
 
+    elif cmd == "/autoverifynow":
+        reply(reply_token, "⏳ กำลังเช็ค email จาก IUX ทันที...")
+        from gmail_poller import poll_new_iux_emails
+        try:
+            poll_new_iux_emails(configuration, db)
+            push(ADMIN_LINE_USER_ID, "✅ เช็ค email เสร็จแล้ว (ดู log สำหรับรายละเอียด)")
+        except Exception as e:
+            push(ADMIN_LINE_USER_ID, f"❌ Auto-verify ล้มเหลว: {e}")
+
     elif cmd == "/broadcast":
         reply(reply_token, "⏳ กำลัง broadcast signal ไปหา verified users...")
         from scheduler import broadcast_signal
@@ -479,6 +488,7 @@ def _handle_admin(text: str, reply_token: str) -> None:
             "/signal              — generate signal ให้ตัวเอง\n"
             "/dailycheck          — วิเคราะห์ทองคำทันที\n"
             "/broadcast           — broadcast ไปหา verified users\n"
+            "/autoverifynow       — เช็ค email IUX และ verify ทันที\n"
             "/help                — แสดง commands",
         )
 
