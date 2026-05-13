@@ -168,6 +168,35 @@ def health():
     return "OK"
 
 
+@app.route("/privacy-policy", methods=["GET"])
+def privacy_policy():
+    """Privacy policy for Trading TP Bot."""
+    return """
+    <html><head><title>Privacy Policy - Trading TP Bot</title></head>
+    <body style="font-family:sans-serif;max-width:800px;margin:40px auto;padding:0 20px">
+    <h1>Privacy Policy</h1>
+    <p><strong>Trading TP Bot</strong> ("the Bot") is a Messenger chatbot that provides
+    forex trading signals and manages user subscriptions.</p>
+    <h2>Data We Collect</h2>
+    <ul>
+      <li>Your Messenger Page-Scoped ID (PSID) to identify you</li>
+      <li>Your display name (fetched from Messenger profile)</li>
+      <li>Your IUX broker user ID (submitted by you for verification)</li>
+      <li>Subscription and verification status</li>
+    </ul>
+    <h2>How We Use Your Data</h2>
+    <p>Data is used solely to deliver trading signals and manage your subscription.
+    We do not sell or share your data with third parties.</p>
+    <h2>Data Retention</h2>
+    <p>Your data is retained while you are an active subscriber. You may request
+    deletion at any time by messaging the bot with <code>/delete</code>.</p>
+    <h2>Contact</h2>
+    <p>For questions, contact: tai-k2003@hotmail.com</p>
+    <p><em>Last updated: May 2026</em></p>
+    </body></html>
+    """, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
 @app.route("/setup/facebook", methods=["GET"])
 def setup_facebook():
     """Check Facebook page connection and webhook subscription status."""
