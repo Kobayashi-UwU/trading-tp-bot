@@ -485,14 +485,16 @@ def _handle_admin(text: str, reply_token: str) -> None:
             reply(reply_token, "❌ รูปแบบไม่ถูกต้อง\nใช้: /update [iux_id_เก่า] [iux_id_ใหม่]")
             return
         old_id, new_id = parts_arg
-        user = db.get_user_by_iux_id(old_id)
-        if user:
-            db.update_iux_id(user["user_id"], new_id, platform=user.get("platform", "line"))
+        users = db.get_all_users_by_iux_id(old_id)
+        real_users = [u for u in users if not u["user_id"].startswith("MANUAL_")]
+        all_targets = real_users if real_users else users
+        if all_targets:
+            for u in all_targets:
+                db.update_iux_id(u["user_id"], new_id, platform=u.get("platform", "line"))
+            platforms = ", ".join(u.get("platform", "line") for u in all_targets)
             reply(reply_token,
-                  f"✅ อัปเดต IUX ID เรียบร้อย\n"
-                  f"เก่า: {old_id}\n"
-                  f"ใหม่: {new_id}\n"
-                  f"Status: {user.get('status', '?')} (คงเดิม)")
+                  f"✅ อัปเดต IUX ID เรียบร้อย ({len(all_targets)} record)\n"
+                  f"เก่า: {old_id}\nใหม่: {new_id}\nPlatform: {platforms}")
         else:
             reply(reply_token, f"❌ ไม่พบ IUX ID: {old_id} ในระบบ")
 
