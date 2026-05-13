@@ -108,9 +108,16 @@ def get_fb_profile(psid: str) -> str:
             params={"fields": "name", "access_token": _token()},
             timeout=10,
         )
-        resp.raise_for_status()
-        return resp.json().get("name", "")
-    except Exception:
+        if not resp.ok:
+            logger.warning("get_fb_profile failed psid=%s status=%s body=%s", psid, resp.status_code, resp.text[:200])
+            return ""
+        data = resp.json()
+        if "error" in data:
+            logger.warning("get_fb_profile API error psid=%s: %s", psid, data["error"])
+            return ""
+        return data.get("name", "")
+    except Exception as e:
+        logger.warning("get_fb_profile exception psid=%s: %s", psid, e)
         return ""
 
 

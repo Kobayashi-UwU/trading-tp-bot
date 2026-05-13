@@ -120,6 +120,14 @@ def handle_fb_message(psid: str, text: str, db, configuration=None) -> None:
         )
         return
 
+    # Backfill display_name if missing (e.g. user joined while app was in Dev Mode)
+    if not user.get("display_name"):
+        fetched_name = get_fb_profile(psid)
+        if fetched_name:
+            db.upsert_user(psid, platform=PLATFORM, display_name=fetched_name)
+            user["display_name"] = fetched_name
+            logger.info("Backfilled display_name for psid=%s: %s", psid, fetched_name)
+
     state = user.get("state", "waiting_iux")
     if state == "waiting_iux":
         _handle_waiting_iux(psid, text, db)
