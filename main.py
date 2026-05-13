@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import threading
 
 from dotenv import load_dotenv
 from flask import Flask, abort, request
@@ -133,14 +134,31 @@ def fb_webhook():
     if data.get("object") != "page":
         return "OK"
 
+    # Collect events to process, then return 200 immediately.
+    # Facebook retries if it doesn't receive 200 within 5 seconds.
+    events_to_process = []
     for entry in data.get("entry", []):
         for event in entry.get("messaging", []):
             psid = event.get("sender", {}).get("id")
             if not psid:
                 continue
-
             logger.info("FB event psid=%s keys=%s", psid, list(event.keys()))
+            events_to_process.append((psid, event))
 
+    if events_to_process:
+        threading.Thread(
+            target=_process_fb_events,
+            args=(events_to_process,),
+            daemon=True,
+        ).start()
+
+    return "OK"
+
+
+def _process_fb_events(events: list) -> None:
+    """Process Facebook webhook events in a background thread."""
+    for psid, event in events:
+        try:
             if "message" in event and not event["message"].get("is_echo"):
                 text = event["message"].get("text", "").strip()
                 logger.info("FB message psid=%s text=%r", psid, text)
@@ -148,17 +166,14 @@ def fb_webhook():
                     facebook_handler.handle_fb_message(psid, text, db, configuration)
 
             elif "pass_thread_control" in event:
-                # Inbox passed thread control to our app — process any pending message
                 new_owner = event["pass_thread_control"].get("new_thread_owner_app_id", "")
                 logger.info("FB pass_thread_control psid=%s new_owner=%s", psid, new_owner)
 
             elif "take_thread_control" in event:
-                # Another app (inbox) took thread control from us
                 prev_owner = event["take_thread_control"].get("previous_thread_owner_app_id", "")
                 logger.info("FB take_thread_control psid=%s prev_owner=%s", psid, prev_owner)
 
             elif "request_thread_control" in event:
-                # Secondary receiver is requesting thread control — auto-pass to them (deny)
                 logger.info("FB request_thread_control psid=%s — ignoring", psid)
 
             elif "optin" in event:
@@ -167,7 +182,8 @@ def fb_webhook():
                     token = optin.get("notification_messages_token", "")
                     facebook_handler.handle_fb_optin(psid, token, db)
 
-    return "OK"
+        except Exception as e:
+            logger.error("Error processing FB event psid=%s: %s", psid, e)
 
 
 @app.route("/health", methods=["GET"])
