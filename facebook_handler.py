@@ -47,8 +47,14 @@ def _line_config() -> Configuration:
     return Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"])
 
 
+def _is_line_enabled() -> bool:
+    return os.environ.get("LINE_ENABLED", "true").lower() == "true"
+
+
 def _push_line_admin(text: str) -> None:
     """Push a notification to the LINE admin account."""
+    if not _is_line_enabled():
+        return
     admin_id = os.environ.get("ADMIN_LINE_USER_ID")
     if not admin_id:
         return
@@ -80,6 +86,8 @@ def _notify_all_admins(text: str, db=None) -> None:
 
 def _push_line_user(user_id: str, text: str) -> None:
     """Push a message to a LINE user."""
+    if not _is_line_enabled():
+        return
     try:
         with ApiClient(_line_config()) as client:
             MessagingApi(client).push_message(

@@ -30,6 +30,7 @@ app = Flask(__name__)
 CHANNEL_SECRET = os.environ["LINE_CHANNEL_SECRET"]
 CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 ADMIN_LINE_USER_ID = os.environ["ADMIN_LINE_USER_ID"]
+LINE_ENABLED = os.environ.get("LINE_ENABLED", "true").lower() == "true"
 
 handler = WebhookHandler(CHANNEL_SECRET)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
@@ -45,12 +46,16 @@ def messaging_api() -> MessagingApi:
 
 
 def reply(reply_token: str, text: str) -> None:
+    if not LINE_ENABLED:
+        return
     messaging_api().reply_message(
         ReplyMessageRequest(reply_token=reply_token, messages=[TextMessage(text=text)])
     )
 
 
 def push(user_id: str, text: str) -> None:
+    if not LINE_ENABLED:
+        return
     messaging_api().push_message(
         PushMessageRequest(to=user_id, messages=[TextMessage(text=text)])
     )
@@ -86,6 +91,8 @@ def get_display_name(user_id: str) -> str:
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    if not LINE_ENABLED:
+        return "OK"
     signature = request.headers.get("X-Line-Signature", "")
     body = request.get_data(as_text=True)
     try:
