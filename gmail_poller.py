@@ -131,8 +131,7 @@ def _poll_iux_emails(configuration, db, unseen_only: bool) -> list[dict]:
 
                 if not pending:
                     logger.info(f"IUX ID {iux_id} not found as pending — skipping")
-                    if unseen_only:
-                        mail.store(eid, "+FLAGS", "\\Seen")
+                    # Do NOT mark as Seen — user may register later and we need to re-process
                     continue
 
                 for u in pending:
@@ -147,6 +146,7 @@ def _poll_iux_emails(configuration, db, unseen_only: bool) -> list[dict]:
                         "platform": u.get("platform", "line"),
                     })
 
+                # Mark as Seen only after successfully verifying at least one user
                 if unseen_only:
                     mail.store(eid, "+FLAGS", "\\Seen")
                 logger.info(f"Auto-verified IUX ID: {iux_id} for {len(pending)} user(s)")
