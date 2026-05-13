@@ -57,8 +57,8 @@ def broadcast_signal(configuration, db) -> None:
 
 
 def send_pending_reminders(configuration, db) -> None:
-    """Send a one-time reminder to users who have been pending for over 12 hours."""
-    users = db.get_long_pending_users(hours=12)
+    """Send a one-time reminder to users who have been pending for over 1 hours."""
+    users = db.get_long_pending_users(hours=1)
     if not users:
         return
 
@@ -103,7 +103,8 @@ def _notify_admin(configuration, db, text: str) -> None:
                 try:
                     _fb_send(admin["user_id"], text)
                 except Exception as e:
-                    logger.error("FB admin notify failed uid=%s: %s", admin["user_id"], e)
+                    logger.error(
+                        "FB admin notify failed uid=%s: %s", admin["user_id"], e)
     except Exception as e:
         logger.error("get_admin_users failed: %s", e)
 
