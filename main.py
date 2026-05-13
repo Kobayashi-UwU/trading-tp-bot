@@ -317,14 +317,25 @@ def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) ->
                 "⏳ รอ Admin ยืนยันสักครู่นะครับ 🙏",
             )
             display_name = user.get("display_name") or get_display_name(user_id) or user_id
-            push(
-                ADMIN_LINE_USER_ID,
+            notify_msg = (
                 f"🔔 มี User ใหม่รอยืนยัน!\n\n"
                 f"ชื่อ LINE  : {display_name}\n"
                 f"IUX User ID: {pending}\n\n"
                 f"✅ ยืนยัน: /verify {pending}\n"
-                f"❌ ปฏิเสธ: /reject {pending}",
+                f"❌ ปฏิเสธ: /reject {pending}"
             )
+            push(ADMIN_LINE_USER_ID, notify_msg)
+            # Notify Facebook admins too
+            try:
+                from facebook_messenger import fb_send as _fb_send
+                for admin in db.get_admin_users():
+                    if admin.get("platform") == "facebook":
+                        try:
+                            _fb_send(admin["user_id"], notify_msg)
+                        except Exception as _e:
+                            logger.error("FB admin notify failed: %s", _e)
+            except Exception as _e:
+                logger.error("get_admin_users failed: %s", _e)
 
     elif text.lower() in no_words:
         db.upsert_user(user_id, pending_iux_id=None, state="waiting_iux")

@@ -55,10 +55,27 @@ def _push_line_admin(text: str) -> None:
     try:
         with ApiClient(_line_config()) as client:
             MessagingApi(client).push_message(
-                PushMessageRequest(to=admin_id, messages=[TextMessage(text=text)])
+                PushMessageRequest(to=admin_id, messages=[
+                                   TextMessage(text=text)])
             )
     except Exception as e:
         logger.error(f"Admin LINE push failed: {e}")
+
+
+def _notify_all_admins(text: str, db=None) -> None:
+    """Notify every admin user across all platforms."""
+    _push_line_admin(text)
+    if db is None:
+        return
+    try:
+        for admin in db.get_admin_users():
+            if admin.get("platform") == "facebook":
+                try:
+                    fb_send(admin["user_id"], text)
+                except Exception as e:
+                    logger.error("FB admin notify failed uid=%s: %s", admin["user_id"], e)
+    except Exception as e:
+        logger.error("get_admin_users failed: %s", e)
 
 
 def _push_line_user(user_id: str, text: str) -> None:
@@ -66,7 +83,8 @@ def _push_line_user(user_id: str, text: str) -> None:
     try:
         with ApiClient(_line_config()) as client:
             MessagingApi(client).push_message(
-                PushMessageRequest(to=user_id, messages=[TextMessage(text=text)])
+                PushMessageRequest(to=user_id, messages=[
+                                   TextMessage(text=text)])
             )
     except Exception as e:
         logger.error(f"LINE push failed for {user_id}: {e}")
@@ -126,7 +144,8 @@ def handle_fb_message(psid: str, text: str, db, configuration=None) -> None:
         if fetched_name:
             db.upsert_user(psid, platform=PLATFORM, display_name=fetched_name)
             user["display_name"] = fetched_name
-            logger.info("Backfilled display_name for psid=%s: %s", psid, fetched_name)
+            logger.info("Backfilled display_name for psid=%s: %s",
+                        psid, fetched_name)
 
     state = user.get("state", "waiting_iux")
     if state == "waiting_iux":
@@ -141,7 +160,8 @@ def handle_fb_optin(psid: str, token: str, db) -> None:
     """Store the Recurring Notifications token when a user opts in."""
     db.upsert_user(psid, platform=PLATFORM, notification_token=token)
     logger.info(f"FB Recurring Notifications opt-in stored for {psid}")
-    fb_send(psid, "✅ ขอบคุณครับ! คุณจะได้รับ Daily Signal ทุกเช้า 8:00 น. โดยอัตโนมัติ 📈")
+    fb_send(
+        psid, "✅ ขอบคุณครับ! คุณจะได้รับ Daily Signal ทุกเช้า 8:00 น. โดยอัตโนมัติ 📈")
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +173,8 @@ def _handle_waiting_iux(psid: str, text: str, db) -> None:
     if iux_id:
         db.upsert_user(psid, platform=PLATFORM,
                        pending_iux_id=iux_id, state="confirming")
-        fb_send(psid, f"IUX User ID: {iux_id} ใช่ไหมครับ? (พิมพ์ ใช่ หรือ ไม่)")
+        fb_send(
+            psid, f"IUX User ID: {iux_id} ใช่ไหมครับ? (พิมพ์ ใช่ หรือ ไม่)")
 
 
 def _handle_confirming(psid: str, text: str, db, user: dict) -> None:
@@ -185,13 +206,15 @@ def _handle_confirming(psid: str, text: str, db, user: dict) -> None:
                 f"✅ บันทึก IUX ID: {pending} เรียบร้อยครับ\n\n"
                 "⏳ รอ Admin ยืนยันสักครู่นะครับ 🙏",
             )
-            display_name = user.get("display_name") or get_fb_profile(psid) or psid
-            _push_line_admin(
+            display_name = user.get(
+                "display_name") or get_fb_profile(psid) or psid
+            _notify_all_admins(
                 f"🔔 มี User ใหม่รอยืนยัน! [Facebook]\n\n"
                 f"ชื่อ Facebook: {display_name}\n"
                 f"IUX User ID : {pending}\n\n"
                 f"✅ ยืนยัน: /verify {pending}\n"
                 f"❌ ปฏิเสธ: /reject {pending}",
+                db=db,
             )
 
     elif text.lower() in _NO_WORDS:
@@ -220,7 +243,8 @@ def _handle_done(psid: str, db, user: dict) -> None:
             try:
                 fb_send_recurring_opt_in(psid)
             except Exception as e:
-                logger.warning(f"Could not send recurring opt-in to {psid}: {e}")
+                logger.warning(
+                    f"Could not send recurring opt-in to {psid}: {e}")
         return
 
     if status == "rejected":
@@ -252,18 +276,21 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
     if cmd == "/addpending" and arg:
         existing = db.get_user_by_iux_id(arg)
         if existing:
-            send(f"⚠️ IUX ID: {arg} มีในระบบแล้ว (status: {existing.get('status')})")
+            send(
+                f"⚠️ IUX ID: {arg} มีในระบบแล้ว (status: {existing.get('status')})")
         else:
             fake_id = f"MANUAL_{arg}"
             db.upsert_user(fake_id, iux_user_id=arg, status="pending",
                            state="done", display_name=f"[Manual] {arg}")
-            send(f"✅ เพิ่ม IUX ID: {arg} เข้าระบบแล้ว\nใช้ /verify {arg} เพื่อยืนยันได้เลย")
+            send(
+                f"✅ เพิ่ม IUX ID: {arg} เข้าระบบแล้ว\nใช้ /verify {arg} เพื่อยืนยันได้เลย")
 
     elif cmd in ("/verify", "/vertify") and arg:
         users = db.get_all_users_by_iux_id(arg)
         if users:
             for u in users:
-                db.upsert_user(u["user_id"], platform=u["platform"], status="verified")
+                db.upsert_user(
+                    u["user_id"], platform=u["platform"], status="verified")
                 _push_to_user(u, _VERIFY_MESSAGE)
             platforms = ", ".join(u["platform"] for u in users)
             send(f"✅ Verified IUX ID: {arg} ({platforms})")
@@ -274,7 +301,8 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
         users = db.get_all_users_by_iux_id(arg)
         if users:
             for u in users:
-                db.upsert_user(u["user_id"], platform=u["platform"], status="rejected")
+                db.upsert_user(
+                    u["user_id"], platform=u["platform"], status="rejected")
                 _push_to_user(
                     u,
                     "❌ IUX User ID ไม่ผ่านการยืนยันครับ\n\n"
@@ -288,12 +316,14 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
     elif cmd == "/update" and arg:
         parts_arg = arg.split()
         if len(parts_arg) != 2:
-            send("❌ รูปแบบไม่ถูกต้อง\nใช้: /update [iux_id_เก่า] [iux_id_ใหม่]")
+            send(
+                "❌ รูปแบบไม่ถูกต้อง\nใช้: /update [iux_id_เก่า] [iux_id_ใหม่]")
             return
         old_id, new_id = parts_arg
         user = db.get_user_by_iux_id(old_id)
         if user:
-            db.update_iux_id(user["user_id"], new_id, platform=user.get("platform", "line"))
+            db.update_iux_id(user["user_id"], new_id,
+                             platform=user.get("platform", "line"))
             send(f"✅ อัปเดต IUX ID เรียบร้อย\nเก่า: {old_id}\nใหม่: {new_id}")
         else:
             send(f"❌ ไม่พบ IUX ID: {old_id} ในระบบ")
@@ -309,7 +339,8 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
                     f"   Platform: {u.get('platform', '-')}\n"
                     f"   Status: {u.get('status', '-')}"
                 )
-            send(f"🔍 ค้นหา '{arg}' พบ {len(users)} คน\n\n" + "\n\n".join(lines))
+            send(f"🔍 ค้นหา '{arg}' พบ {len(users)} คน\n\n" +
+                 "\n\n".join(lines))
         else:
             send(f"❌ ไม่พบชื่อที่ค้นหา: '{arg}'")
 
@@ -333,7 +364,8 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
     elif cmd == "/reset" and arg:
         user = db.get_user_by_iux_id(arg)
         if user:
-            db.reset_user(user["user_id"], platform=user.get("platform", "line"))
+            db.reset_user(user["user_id"],
+                          platform=user.get("platform", "line"))
             send(f"🔄 Reset user IUX ID: {arg} แล้ว")
         else:
             send(f"❌ ไม่พบ IUX ID: {arg}")
@@ -365,7 +397,8 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
                     f"{i+1}. IUX ID: {v['iux_id']}  ชื่อ {v['platform'].upper()}: {v['display_name']}"
                     for i, v in enumerate(verified)
                 )
-                send(f"✅ เช็ค email เสร็จแล้ว\n\nUser ใหม่ที่ verify แล้ว:\n{lines}")
+                send(
+                    f"✅ เช็ค email เสร็จแล้ว\n\nUser ใหม่ที่ verify แล้ว:\n{lines}")
             else:
                 send("✅ เช็ค email เสร็จแล้ว\nไม่พบ user ใหม่ที่รอ verify")
         except Exception as e:

@@ -66,6 +66,16 @@ class Database:
         )
         return result.data
 
+    def get_admin_users(self) -> list[dict]:
+        """Return all users with user_role = 'admin' across all platforms."""
+        result = (
+            self.client.table(self.table)
+            .select("user_id, platform, display_name")
+            .eq("user_role", "admin")
+            .execute()
+        )
+        return result.data
+
     def get_long_pending_users(self, hours: int = 12) -> list[dict]:
         """Return pending users waiting longer than `hours` who haven't been reminded yet."""
         from datetime import timedelta
