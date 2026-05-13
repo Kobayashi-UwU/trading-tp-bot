@@ -60,10 +60,20 @@ def _push_user(user: dict, text: str, configuration) -> None:
     """Send a push message to a user on their platform."""
     platform = user.get("platform", "line")
     uid = user["user_id"]
+
+    # MANUAL_ entries are placeholders with no real messaging channel
+    if uid.startswith("MANUAL_"):
+        logger.info("Skipping push for MANUAL user %s — no real messaging channel", uid)
+        return
+
     if platform == "facebook":
         from facebook_messenger import fb_send
         fb_send(uid, text)
     else:
+        line_enabled = os.environ.get("LINE_ENABLED", "true").lower() == "true"
+        if not line_enabled:
+            logger.info("LINE disabled — skipping push for LINE user %s", uid)
+            return
         with ApiClient(configuration) as client:
             MessagingApi(client).push_message(
                 PushMessageRequest(to=uid, messages=[TextMessage(text=text)])

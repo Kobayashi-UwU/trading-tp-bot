@@ -291,7 +291,11 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
             db.upsert_user(fake_id, iux_user_id=arg, status="pending",
                            state="done", display_name=f"[Manual] {arg}")
             send(
-                f"✅ เพิ่ม IUX ID: {arg} เข้าระบบแล้ว\nใช้ /verify {arg} เพื่อยืนยันได้เลย")
+                f"✅ เพิ่ม IUX ID: {arg} เข้าระบบแล้ว\n\n"
+                f"⚠️ หมายเหตุ: user นี้เป็น placeholder ไม่มีบัญชี FB/LINE\n"
+                f"บอทจะ verify อัตโนมัติเมื่อเจอ email แต่จะ**ไม่ส่งข้อความ**แจ้ง user\n"
+                f"ต้องแจ้ง user เองด้วยตนเอง หรือรอให้ user เริ่มคุยกับบอทก่อน\n\n"
+                f"ใช้ /verify {arg} เพื่อยืนยันได้เลย")
 
     elif cmd in ("/verify", "/vertify") and arg:
         users = db.get_all_users_by_iux_id(arg)
