@@ -134,7 +134,7 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
     scheduler.add_job(
         send_pending_reminders,
         trigger="interval",
-        minutes=30,
+        minutes=70,
         args=[configuration, db],
         id="pending_reminder",
         name="Pending User Reminder",
