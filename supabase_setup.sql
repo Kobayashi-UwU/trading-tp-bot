@@ -53,3 +53,15 @@ ALTER TABLE users ADD PRIMARY KEY (platform, user_id);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE;
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS user_role TEXT DEFAULT NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Explicit GRANTs (required from Oct 30, 2026 — Supabase Data API policy change)
+-- ─────────────────────────────────────────────────────────────────────────────
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO authenticated;
+
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY IF NOT EXISTS "service_role full access"
+  ON public.users FOR ALL TO service_role
+  USING (true) WITH CHECK (true);
