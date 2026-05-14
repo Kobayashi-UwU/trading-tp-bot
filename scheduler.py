@@ -125,7 +125,7 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
     scheduler.add_job(
         poll_new_iux_emails,
         trigger="interval",
-        minutes=10,
+        minutes=60,
         args=[configuration, db],
         id="gmail_poll",
         name="Gmail IUX Auto-Verify",
