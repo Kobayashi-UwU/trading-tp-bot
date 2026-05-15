@@ -203,6 +203,10 @@ def _handle_confirming(psid: str, text: str, db, user: dict) -> None:
                 status="verified", state="done", pending_notified=True,
             )
             fb_send(psid, _VERIFY_MESSAGE)
+            try:
+                fb_send_recurring_opt_in(psid)
+            except Exception as e:
+                logger.warning("Could not send recurring opt-in to %s: %s", psid, e)
         else:
             db.upsert_user(
                 psid, platform=PLATFORM,
@@ -304,6 +308,11 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
                 db.upsert_user(
                     u["user_id"], platform=u["platform"], status="verified")
                 _push_to_user(u, _VERIFY_MESSAGE)
+                if u["platform"] == "facebook" and not u.get("notification_token"):
+                    try:
+                        fb_send_recurring_opt_in(u["user_id"])
+                    except Exception as e:
+                        logger.warning("Could not send recurring opt-in to %s: %s", u["user_id"], e)
             platforms = ", ".join(u["platform"] for u in users)
             send(f"✅ Verified IUX ID: {arg} ({platforms})")
         else:

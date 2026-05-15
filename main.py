@@ -467,6 +467,12 @@ def _handle_admin(text: str, reply_token: str) -> None:
             for u in users:
                 db.upsert_user(u["user_id"], platform=u["platform"], status="verified")
                 push_to_user(u, _VERIFY_MSG)
+                if u.get("platform") == "facebook" and not u.get("notification_token"):
+                    try:
+                        from facebook_messenger import fb_send_recurring_opt_in
+                        fb_send_recurring_opt_in(u["user_id"])
+                    except Exception as e:
+                        logger.warning("Could not send recurring opt-in to %s: %s", u["user_id"], e)
             platforms = ", ".join(u["platform"] for u in users)
             reply(reply_token, f"✅ Verified IUX ID: {arg} ({platforms})")
         else:

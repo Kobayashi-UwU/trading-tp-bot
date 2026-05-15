@@ -150,6 +150,12 @@ def _poll_iux_emails(configuration, db, unseen_only: bool) -> list[dict]:
                         _push_user(u, _VERIFY_MSG, configuration)
                     except Exception as e:
                         logger.error(f"Push failed for {u['user_id']}: {e}")
+                    if u.get("platform") == "facebook" and not u.get("notification_token"):
+                        try:
+                            from facebook_messenger import fb_send_recurring_opt_in
+                            fb_send_recurring_opt_in(u["user_id"])
+                        except Exception as e:
+                            logger.warning("Could not send recurring opt-in to %s: %s", u["user_id"], e)
                     verified_results.append({
                         "iux_id": iux_id,
                         "display_name": u.get("display_name") or "-",
