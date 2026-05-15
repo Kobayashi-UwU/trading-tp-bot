@@ -201,12 +201,9 @@ def _handle_confirming(psid: str, text: str, db, user: dict) -> None:
                 psid, platform=PLATFORM,
                 iux_user_id=pending, pending_iux_id=None,
                 status="verified", state="done", pending_notified=True,
+                notification_token="ENGAGED",
             )
             fb_send(psid, _VERIFY_MESSAGE)
-            try:
-                fb_send_recurring_opt_in(psid)
-            except Exception as e:
-                logger.warning("Could not send recurring opt-in to %s: %s", psid, e)
         else:
             db.upsert_user(
                 psid, platform=PLATFORM,
@@ -252,11 +249,11 @@ def _handle_done(psid: str, db, user: dict) -> None:
 
     if status == "verified":
         if not user.get("notification_token"):
-            try:
-                fb_send_recurring_opt_in(psid)
-            except Exception as e:
-                logger.warning(
-                    f"Could not send recurring opt-in to {psid}: {e}")
+            fb_send(
+                psid,
+                "✅ ยืนยันแล้ว! คุณจะได้รับ Daily Trading Signal ทุกเช้า 8:00 น. ครับ 📈",
+            )
+            db.upsert_user(psid, platform=PLATFORM, notification_token="ENGAGED")
         return
 
     if status == "rejected":

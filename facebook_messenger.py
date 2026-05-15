@@ -37,30 +37,21 @@ def fb_send(psid: str, text: str) -> None:
 
 
 def fb_send_recurring_opt_in(psid: str) -> None:
-    """Send a 'Notify Me' button so the user can opt in to daily signals."""
-    if not _is_enabled():
-        return
-    payload = {
-        "recipient": {"id": psid},
-        "message": {
-            "attachment": {
-                "type": "template",
-                "payload": {
-                    "template_type": "notification_messages",
-                    "title": "Daily Trading Signal 📈",
-                    "notification_messages_frequency": "DAILY",
-                    "notification_messages_cta_text": "ALLOW_MORE_NOTIFICATIONS",
-                },
-            }
-        },
-    }
-    resp = requests.post(
-        f"{_GRAPH_BASE}/me/messages",
-        params={"access_token": _token()},
-        json=payload,
-        timeout=10,
+    """Ask the user to send a message so we can keep the 24-hour window open.
+
+    Note: Facebook Recurring Notifications API (template_type=notification_messages)
+    requires a separate feature approval (error_subcode 2018012). Until that is
+    approved, we send a plain-text prompt instead.
+    """
+    fb_send(
+        psid,
+        "📬 เพื่อให้แน่ใจว่าคุณจะได้รับ Daily Signal ทุกเช้า 8:00 น.\n\n"
+        "กรุณาตอบกลับข้อความนี้ด้วยอะไรก็ได้ (เช่น 'ok' หรือ 'ได้เลย') "
+        "เพื่อเปิดใช้งานการแจ้งเตือนครับ 🙏",
     )
-    resp.raise_for_status()
+
+
+_ENGAGED_SENTINEL = "ENGAGED"
 
 
 def fb_push(psid: str, text: str, notification_token: str | None = None) -> None:
@@ -68,11 +59,14 @@ def fb_push(psid: str, text: str, notification_token: str | None = None) -> None
 
     Uses the Recurring Notifications token when available (works outside the
     24-hour window). Falls back to a regular send otherwise.
+
+    notification_token == ENGAGED_SENTINEL means the user has engaged with the
+    bot and we should use regular send (within 24-hour window only).
     """
     if not _is_enabled():
         logger.warning("FB_PAGE_ACCESS_TOKEN not set — fb_push skipped")
         return
-    if notification_token:
+    if notification_token and notification_token != _ENGAGED_SENTINEL:
         resp = requests.post(
             f"{_GRAPH_BASE}/me/messages",
             params={"access_token": _token()},
