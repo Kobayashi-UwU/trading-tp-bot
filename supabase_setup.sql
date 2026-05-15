@@ -56,12 +56,19 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS user_role TEXT DEFAULT NULL;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Explicit GRANTs (required from Oct 30, 2026 — Supabase Data API policy change)
+-- Run ONLY after Oct 2026, or when fully ready to enforce RLS.
+-- WARNING: enabling RLS without complete policies will block bot INSERTs.
 -- ─────────────────────────────────────────────────────────────────────────────
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO authenticated;
-
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY IF NOT EXISTS "service_role full access"
-  ON public.users FOR ALL TO service_role
-  USING (true) WITH CHECK (true);
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO service_role;
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO authenticated;
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO anon;
+--
+-- ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+--
+-- CREATE POLICY IF NOT EXISTS "service_role full access"
+--   ON public.users FOR ALL TO service_role
+--   USING (true) WITH CHECK (true);
+--
+-- CREATE POLICY IF NOT EXISTS "anon full access"
+--   ON public.users FOR ALL TO anon
+--   USING (true) WITH CHECK (true);
