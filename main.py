@@ -4,7 +4,7 @@ import re
 import threading
 
 from dotenv import load_dotenv
-from flask import Flask, abort, request
+from flask import Flask, abort, jsonify, request
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
@@ -186,9 +186,17 @@ def _process_fb_events(events: list) -> None:
             logger.error("Error processing FB event psid=%s: %s", psid, e)
 
 
+_scheduler = None
+
+
 @app.route("/health", methods=["GET"])
 def health():
-    return "OK"
+    status = {"status": "ok", "scheduler": "unknown"}
+    if _scheduler is not None:
+        status["scheduler"] = "running" if _scheduler.running else "stopped"
+    if status["scheduler"] == "stopped":
+        return jsonify(status), 500
+    return jsonify(status)
 
 
 @app.route("/privacy-policy", methods=["GET"])
@@ -627,7 +635,7 @@ def _handle_admin(text: str, reply_token: str) -> None:
 # Start scheduler & app
 # ---------------------------------------------------------------------------
 
-start_scheduler(configuration, db)
+_scheduler = start_scheduler(configuration, db)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
