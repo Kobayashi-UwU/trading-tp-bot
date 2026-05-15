@@ -38,6 +38,9 @@ def broadcast_signal(configuration, db) -> None:
     for user in verified_users:
         uid = user["user_id"]
         platform = user.get("platform", "line")
+        if platform == "line" and not _LINE_ENABLED:
+            logger.debug(f"Skipping LINE user {uid} (LINE_ENABLED=false)")
+            continue
         try:
             if platform == "line":
                 _line_push(configuration, uid, signal)
@@ -75,6 +78,9 @@ def send_pending_reminders(configuration, db) -> None:
     for user in users:
         uid = user["user_id"]
         platform = user.get("platform", "line")
+        if platform == "line" and not _LINE_ENABLED:
+            logger.debug(f"Skipping LINE reminder for {uid} (LINE_ENABLED=false)")
+            continue
         try:
             if platform == "line":
                 _line_push(configuration, uid, _REMINDER_MSG)
