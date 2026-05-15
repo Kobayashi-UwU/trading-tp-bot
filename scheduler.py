@@ -121,6 +121,7 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
         id="daily_signal",
         name="Daily Morning Signal",
         replace_existing=True,
+        misfire_grace_time=3600,  # run if missed by up to 1 hour (e.g. after server restart)
     )
     scheduler.add_job(
         poll_new_iux_emails,
