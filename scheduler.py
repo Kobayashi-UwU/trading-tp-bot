@@ -114,16 +114,6 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
 
     scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Bangkok"))
     scheduler.add_job(
-        send_morning_reminder,
-        trigger=CronTrigger(
-            hour=8, minute=0, day_of_week="mon-fri", timezone="Asia/Bangkok"),
-        args=[configuration, db],
-        id="daily_signal",
-        name="Daily Morning Reminder",
-        replace_existing=True,
-        misfire_grace_time=3600,
-    )
-    scheduler.add_job(
         poll_new_iux_emails,
         trigger="interval",
         minutes=60,
@@ -142,6 +132,5 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
         replace_existing=True,
     )
     scheduler.start()
-    logger.info(
-        "Scheduler started — Daily signal at 08:00 Bangkok time, Gmail poll every 10 min")
+    logger.info("Scheduler started — Gmail poll every 60 min, pending reminder every 70 min")
     return scheduler
