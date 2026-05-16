@@ -24,7 +24,8 @@ _VERIFY_MESSAGE = (
     "🎉 ยืนยันเรียบร้อยแล้วครับ!\n\n"
     "กลุ่มไลน์: https://line.me/ti/g2/2qPd6fIG5bY4P04_uKo_0sLKLDvqqTsAILh5Qg"
     "?utm_source=invitation&utm_medium=link_copy&utm_campaign=default\n\n"
-    "คุณจะได้รับ Daily Trading Signal ทุกเช้า 8:00 น.📈\n\n"
+    "📊 วิธีดู Daily Signal:\n"
+    "พิมพ์ /signal ในแชทนี้เพื่อดู signal ทองคำประจำวัน (วันละ 1 ครั้ง)\n\n"
     "Strategy / Pine Script\n"
     "https://github.com/Kobayashi-UwU/trading_tp/tree/main/strategy\n\n"
     "Prompt\n"
@@ -133,7 +134,7 @@ def handle_fb_message(psid: str, text: str, db, configuration=None) -> None:
         fb_send(
             psid,
             "สวัสดีครับ! ยินดีต้อนรับสู่ TradingTP 🎉\n\n"
-            "เพื่อรับ Daily Trend ฟรีทุกเช้า 8:00 น. / Prompt หรือ โค้ดต่างๆ "
+            "เพื่อรับ Daily Signal ฟรี / Prompt หรือ โค้ดต่างๆ "
             "กรุณาส่ง IUX User ID ของคุณมาได้เลยครับ\n\n"
             "💡 IUX User ID คือตัวเลข 6 หรือ 8 หลักที่แสดงอยู่ในหน้า Profile ของ IUX ครับ\n\n"
             "หรือหากยังไม่มีบัญชี IUX สามารถสมัครฟรีได้ที่ "
@@ -156,6 +157,10 @@ def handle_fb_message(psid: str, text: str, db, configuration=None) -> None:
                         psid, fetched_name)
 
     state = user.get("state", "waiting_iux")
+    if text.lower() == "/signal" and user.get("status") == "verified":
+        _handle_fb_user_signal(psid, user, db)
+        return
+
     if state == "waiting_iux":
         _handle_waiting_iux(psid, text, db)
     elif state == "confirming":
@@ -249,11 +254,8 @@ def _handle_done(psid: str, db, user: dict) -> None:
 
     if status == "verified":
         if not user.get("notification_token"):
-            fb_send(
-                psid,
-                "✅ ยืนยันแล้ว! คุณจะได้รับ Daily Trading Signal ทุกเช้า 8:00 น. ครับ 📈",
-            )
             db.upsert_user(psid, platform=PLATFORM, notification_token="ENGAGED")
+        fb_send(psid, "📊 พิมพ์ /signal เพื่อดู signal ทองคำประจำวันได้เลยครับ (วันละ 1 ครั้ง)")
         return
 
     if status == "rejected":
@@ -268,6 +270,31 @@ def _handle_done(psid: str, db, user: dict) -> None:
             "กรุณาส่ง IUX User ID ใหม่ได้เลยครับ\n"
             "(ตรวจสอบว่าสมัคร IUX ผ่าน affiliate link ของ TradingTP แล้วนะครับ)",
         )
+
+
+# ---------------------------------------------------------------------------
+# User /signal handler
+# ---------------------------------------------------------------------------
+
+def _handle_fb_user_signal(psid: str, user: dict, db) -> None:
+    """Handle /signal command for a verified Facebook user — one request per day."""
+    import pytz
+    from datetime import datetime
+    tz = pytz.timezone("Asia/Bangkok")
+    today = datetime.now(tz).strftime("%Y-%m-%d")
+
+    if user.get("last_signal_date") == today:
+        fb_send(psid, "⚠️ คุณขอดู signal แล้ววันนี้ครับ\nกลับมาใหม่พรุ่งนี้ได้เลย 📅")
+        return
+
+    from signal_gen import generate_gold_analysis
+    try:
+        signal = generate_gold_analysis()
+        db.upsert_user(psid, platform=PLATFORM, last_signal_date=today)
+        fb_send(psid, signal)
+    except Exception as e:
+        logger.error("Signal generation failed for %s: %s", psid, e)
+        fb_send(psid, "❌ Generate signal ล้มเหลว กรุณาลองใหม่อีกครั้งครับ")
 
 
 # ---------------------------------------------------------------------------
@@ -459,7 +486,7 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
             "/info [ID]            — ดูข้อมูล user\n"
             "/findname [ชื่อ]       — ค้นหา user จากชื่อ\n"
             "/list                 — ดู users ทั้งหมด\n"
-            "/signal              — generate signal ให้ตัวเอง\n"
+            "/signal              — generate signal (admin: ดูทันที / user: ดูได้วันละ 1 ครั้ง)\n"
             "/dailycheck          — วิเคราะห์ทองคำทันที\n"
             "/broadcast           — broadcast ไปหา verified users\n"
             "/autoverifynow       — เช็ค email IUX และ verify ทันที\n"

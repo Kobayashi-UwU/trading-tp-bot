@@ -264,7 +264,7 @@ def handle_follow(event):
     reply(
         event.reply_token,
         "สวัสดีครับ! ยินดีต้อนรับสู่ TradingTP 🎉\n\n"
-        "เพื่อรับ Daily Trend ฟรีทุกเช้า 8:00 น. / Prompt หรือ โค้ดต่างๆ กรุณาส่ง IUX User ID ของคุณมาได้เลยครับ\n\n"
+        "เพื่อรับ Daily Signal ฟรี / Prompt หรือ โค้ดต่างๆ กรุณาส่ง IUX User ID ของคุณมาได้เลยครับ\n\n"
         "💡 IUX User ID คือตัวเลข 6 หรือ 8 หลักที่แสดงอยู่ในหน้า Profile ของ IUX ครับ\n\n"
         "หรือหากยังไม่มีบัญชี IUX สามารถสมัครฟรีได้ที่ https://iux.com/en/register?code=IuyjFrlz เลยครับ\n\n"
         "สำหรับคนที่มีบัญชี iux อยู่แล้ว ต้องโอนย้ายก่อนนะครับตามลิงค์นี้\n"
@@ -342,6 +342,10 @@ def handle_message(event):
     if not user:
         db.upsert_user(user_id, status="new", state="waiting_iux")
         reply(reply_token, "กรุณาส่ง IUX User ID ของคุณเพื่อรับสิทธิ์ Daily Signal / Code / Prompt ครับ")
+        return
+
+    if text.lower() == "/signal" and user.get("status") == "verified":
+        _handle_user_signal(user, reply_token)
         return
 
     state = user.get("state", "waiting_iux")
@@ -433,6 +437,7 @@ def _handle_done(user: dict, reply_token: str) -> None:
             db.upsert_user(user["user_id"], pending_notified=True)
         return
     if status == "verified":
+        reply(reply_token, "📊 พิมพ์ /signal เพื่อดู signal ทองคำประจำวันได้เลยครับ (วันละ 1 ครั้ง)")
         return
     elif status == "rejected":
         db.upsert_user(
@@ -448,6 +453,31 @@ def _handle_done(user: dict, reply_token: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# User signal request handler
+# ---------------------------------------------------------------------------
+
+def _handle_user_signal(user: dict, reply_token: str) -> None:
+    """Handle /signal command for a verified LINE user — one request per day."""
+    import pytz
+    from datetime import datetime
+    tz = pytz.timezone("Asia/Bangkok")
+    today = datetime.now(tz).strftime("%Y-%m-%d")
+
+    if user.get("last_signal_date") == today:
+        reply(reply_token, "⚠️ คุณขอดู signal แล้ววันนี้ครับ\nกลับมาใหม่พรุ่งนี้ได้เลย 📅")
+        return
+
+    from signal_gen import generate_gold_analysis
+    try:
+        signal = generate_gold_analysis()
+        db.upsert_user(user["user_id"], platform="line", last_signal_date=today)
+        reply(reply_token, signal)
+    except Exception as e:
+        logger.error("Signal generation failed for %s: %s", user["user_id"], e)
+        reply(reply_token, f"❌ Generate signal ล้มเหลว กรุณาลองใหม่อีกครั้งครับ")
+
+
+# ---------------------------------------------------------------------------
 # Admin command handler
 # ---------------------------------------------------------------------------
 
@@ -455,7 +485,8 @@ _VERIFY_MSG = (
     "🎉 ยืนยันเรียบร้อยแล้วครับ!\n\n"
     "กลุ่มไลน์: https://line.me/ti/g2/2qPd6fIG5bY4P04_uKo_0sLKLDvqqTsAILh5Qg"
     "?utm_source=invitation&utm_medium=link_copy&utm_campaign=default\n\n"
-    "คุณจะได้รับ Daily Trading Signal ทุกเช้า 8:00 น.📈\n\n"
+    "📊 วิธีดู Daily Signal:\n"
+    "พิมพ์ /signal ในแชทนี้เพื่อดู signal ทองคำประจำวัน (วันละ 1 ครั้ง)\n\n"
     "Strategy / Pine Script\n"
     "https://github.com/Kobayashi-UwU/trading_tp/tree/main/strategy\n\n"
     "Prompt\n"
@@ -672,7 +703,7 @@ def _handle_admin(text: str, reply_token: str) -> None:
             "/info [ID]            — ดูข้อมูล user\n"
             "/findname [ชื่อ]       — ค้นหา user จากชื่อ\n"
             "/list                 — ดู users ทั้งหมด\n"
-            "/signal              — generate signal ให้ตัวเอง\n"
+            "/signal              — generate signal (admin: ดูทันที / user: ดูได้วันละ 1 ครั้ง)\n"
             "/dailycheck          — วิเคราะห์ทองคำทันที\n"
             "/broadcast           — broadcast ไปหา verified users\n"
             "/autoverifynow       — เช็ค email IUX และ verify ทันที\n"

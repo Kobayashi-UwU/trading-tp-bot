@@ -21,7 +21,21 @@ def _line_push(configuration, user_id: str, text: str) -> None:
         )
 
 
+def send_morning_reminder(configuration, db) -> None:
+    """Send a short nudge to the LINE group that signal is available for the day."""
+    from line_notify import send_group_signal
+    reminder = (
+        "📊 Signal ทองคำประจำวันพร้อมแล้วครับ!\n\n"
+        "👉 ส่ง /signal ในแชทบอทเพื่อดู signal ได้เลยครับ"
+    )
+    ok = send_group_signal(reminder)
+    status = "✅ ส่งสำเร็จ" if ok else "⚠️ ไม่ได้ส่ง (LINE_BROADCAST_GROUP_ID ไม่ได้ตั้งค่า)"
+    logger.info("Morning reminder: %s", status)
+    _notify_admin(configuration, db, f"📢 ส่ง reminder เช้าเรียบร้อย\nLINE Group: {status}")
+
+
 def broadcast_signal(configuration, db) -> None:
+    """Generate and send the full signal to the LINE group (admin /broadcast command)."""
     from signal_gen import generate_gold_analysis
 
     try:
@@ -32,7 +46,6 @@ def broadcast_signal(configuration, db) -> None:
         _notify_admin(configuration, db, f"❌ Generate signal ล้มเหลว: {e}")
         return
 
-    # ── Broadcast to LINE group via Messaging API (no per-user loop needed) ──
     from line_notify import send_group_signal
     ok = send_group_signal(signal)
     status = "✅ ส่งสำเร็จ" if ok else "⚠️ LINE_BROADCAST_GROUP_ID ไม่ได้ตั้งค่า — ไม่ได้ส่ง"
@@ -101,14 +114,14 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
 
     scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Bangkok"))
     scheduler.add_job(
-        broadcast_signal,
+        send_morning_reminder,
         trigger=CronTrigger(
             hour=8, minute=0, day_of_week="mon-fri", timezone="Asia/Bangkok"),
         args=[configuration, db],
         id="daily_signal",
-        name="Daily Morning Signal",
+        name="Daily Morning Reminder",
         replace_existing=True,
-        misfire_grace_time=3600,  # run if missed by up to 1 hour (e.g. after server restart)
+        misfire_grace_time=3600,
     )
     scheduler.add_job(
         poll_new_iux_emails,
