@@ -15,7 +15,13 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     TextMessage,
 )
-from linebot.v3.webhooks import FollowEvent, MessageEvent, TextMessageContent, UnfollowEvent
+from linebot.v3.webhooks import (
+    FollowEvent,
+    JoinEvent,
+    MessageEvent,
+    TextMessageContent,
+    UnfollowEvent,
+)
 
 import facebook_handler
 from db import Database
@@ -92,8 +98,6 @@ def get_display_name(user_id: str) -> str:
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    if not LINE_ENABLED:
-        return "OK"
     signature = request.headers.get("X-Line-Signature", "")
     body = request.get_data(as_text=True)
     try:
@@ -251,6 +255,8 @@ def setup_facebook():
 
 @handler.add(FollowEvent)
 def handle_follow(event):
+    if not LINE_ENABLED:
+        return
     user_id = event.source.user_id
     display_name = get_display_name(user_id)
     db.upsert_user(user_id, status="new", state="waiting_iux",
@@ -279,11 +285,51 @@ def handle_unfollow(event):
 
 
 # ---------------------------------------------------------------------------
+# LINE event: Join group — capture group ID and notify admin
+# ---------------------------------------------------------------------------
+
+@handler.add(JoinEvent)
+def handle_join(event):
+    """Fired when the bot is added to a LINE group or room."""
+    source = event.source
+    group_id = getattr(source, "group_id", None) or getattr(source, "room_id", None)
+    if not group_id:
+        logger.warning("JoinEvent fired but could not extract group/room ID")
+        return
+
+    logger.info("Bot joined LINE group/room: %s", group_id)
+
+    msg = (
+        f"🎉 Bot ถูกเพิ่มเข้ากลุ่ม LINE แล้ว!\n\n"
+        f"Group ID: {group_id}\n\n"
+        f"คัดลอก ID นี้ไปตั้งค่า LINE_BROADCAST_GROUP_ID ใน Railway ด้วยครับ"
+    )
+
+    # Notify Facebook admin
+    try:
+        from facebook_messenger import fb_send as _fb_send
+        for admin in db.get_admin_users():
+            if admin.get("platform") == "facebook":
+                try:
+                    _fb_send(admin["user_id"], msg)
+                except Exception as _e:
+                    logger.error("FB admin notify failed: %s", _e)
+    except Exception as _e:
+        logger.error("get_admin_users failed: %s", _e)
+
+    # Also notify LINE admin if enabled
+    if LINE_ENABLED:
+        push(ADMIN_LINE_USER_ID, msg)
+
+
+# ---------------------------------------------------------------------------
 # LINE event: Message
 # ---------------------------------------------------------------------------
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
+    if not LINE_ENABLED:
+        return
     user_id = event.source.user_id
     text = event.message.text.strip()
     reply_token = event.reply_token

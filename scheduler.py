@@ -32,11 +32,11 @@ def broadcast_signal(configuration, db) -> None:
         _notify_admin(configuration, db, f"❌ Generate signal ล้มเหลว: {e}")
         return
 
-    # ── Broadcast to LINE group via LINE Notify (no per-user loop needed) ──
+    # ── Broadcast to LINE group via Messaging API (no per-user loop needed) ──
     from line_notify import send_group_signal
     ok = send_group_signal(signal)
-    status = "✅ ส่งสำเร็จ" if ok else "⚠️ LINE_NOTIFY_TOKEN ไม่ได้ตั้งค่า — ไม่ได้ส่ง"
-    logger.info("LINE Notify broadcast: %s", status)
+    status = "✅ ส่งสำเร็จ" if ok else "⚠️ LINE_BROADCAST_GROUP_ID ไม่ได้ตั้งค่า — ไม่ได้ส่ง"
+    logger.info("LINE group broadcast: %s", status)
     _notify_admin(configuration, db, f"📢 Broadcast เสร็จแล้ว\nLINE Group: {status}")
 
 

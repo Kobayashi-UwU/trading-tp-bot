@@ -1,35 +1,41 @@
 import logging
 import os
 
-import requests
+from linebot.v3.messaging import (
+    ApiClient,
+    Configuration,
+    MessagingApi,
+    PushMessageRequest,
+    TextMessage,
+)
 
 logger = logging.getLogger(__name__)
 
-_LINE_NOTIFY_URL = "https://notify-api.line.me/api/notify"
 
+def send_group_signal(message: str) -> bool:
+    """Broadcast a message to the LINE group using the LINE Messaging API.
 
-def send_group_signal(message: str, token: str = None) -> bool:
-    """Broadcast a message to the LINE group via LINE Notify.
-
+    Requires LINE_BROADCAST_GROUP_ID and LINE_CHANNEL_ACCESS_TOKEN env vars.
     Returns True on success, False otherwise.
-    Token defaults to the LINE_NOTIFY_TOKEN environment variable.
     """
-    token = token or os.environ.get("LINE_NOTIFY_TOKEN")
+    group_id = os.environ.get("LINE_BROADCAST_GROUP_ID")
+    token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
+
+    if not group_id:
+        logger.warning("LINE_BROADCAST_GROUP_ID not set — skipping group broadcast")
+        return False
     if not token:
-        logger.warning("LINE_NOTIFY_TOKEN not set — skipping LINE Notify broadcast")
+        logger.warning("LINE_CHANNEL_ACCESS_TOKEN not set — skipping group broadcast")
         return False
+
     try:
-        resp = requests.post(
-            _LINE_NOTIFY_URL,
-            headers={"Authorization": f"Bearer {token}"},
-            data={"message": message},
-            timeout=15,
-        )
-        if resp.status_code == 200:
-            logger.info("LINE Notify broadcast sent successfully")
-            return True
-        logger.error("LINE Notify failed: %s %s", resp.status_code, resp.text)
-        return False
+        config = Configuration(access_token=token)
+        with ApiClient(config) as client:
+            MessagingApi(client).push_message(
+                PushMessageRequest(to=group_id, messages=[TextMessage(text=message)])
+            )
+        logger.info("LINE group broadcast sent to group %s", group_id)
+        return True
     except Exception as e:
-        logger.error("LINE Notify error: %s", e)
+        logger.error("LINE group push failed: %s", e)
         return False
