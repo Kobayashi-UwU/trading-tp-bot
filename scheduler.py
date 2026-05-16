@@ -12,6 +12,7 @@ _LINE_ENABLED = os.environ.get("LINE_ENABLED", "true").lower() == "true"
 
 
 def _line_push(configuration, user_id: str, text: str) -> None:
+    """Push a message to an individual LINE user (used for reminders and admin notify)."""
     if not _LINE_ENABLED:
         return
     with ApiClient(configuration) as api_client:
@@ -31,32 +32,12 @@ def broadcast_signal(configuration, db) -> None:
         _notify_admin(configuration, db, f"❌ Generate signal ล้มเหลว: {e}")
         return
 
-    verified_users = db.get_verified_users()
-    logger.info(f"Broadcasting to {len(verified_users)} verified users")
-
-    success, failed = 0, 0
-    for user in verified_users:
-        uid = user["user_id"]
-        platform = user.get("platform", "line")
-        if platform == "line" and not _LINE_ENABLED:
-            logger.debug(f"Skipping LINE user {uid} (LINE_ENABLED=false)")
-            continue
-        try:
-            if platform == "line":
-                _line_push(configuration, uid, signal)
-            elif platform == "facebook":
-                from facebook_messenger import fb_push
-                fb_push(uid, signal, user.get("notification_token"))
-            success += 1
-        except Exception as e:
-            logger.error(f"Push failed for {uid} ({platform}): {e}")
-            failed += 1
-
-    logger.info(f"Broadcast done — success: {success}, failed: {failed}")
-    _notify_admin(
-        configuration, db,
-        f"✅ Broadcast เสร็จแล้ว\nส่งสำเร็จ: {success} คน\nล้มเหลว: {failed} คน",
-    )
+    # ── Broadcast to LINE group via LINE Notify (no per-user loop needed) ──
+    from line_notify import send_group_signal
+    ok = send_group_signal(signal)
+    status = "✅ ส่งสำเร็จ" if ok else "⚠️ LINE_NOTIFY_TOKEN ไม่ได้ตั้งค่า — ไม่ได้ส่ง"
+    logger.info("LINE Notify broadcast: %s", status)
+    _notify_admin(configuration, db, f"📢 Broadcast เสร็จแล้ว\nLINE Group: {status}")
 
 
 def send_pending_reminders(configuration, db) -> None:
