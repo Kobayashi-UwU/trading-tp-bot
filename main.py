@@ -515,7 +515,7 @@ def _handle_admin(text: str, reply_token: str) -> None:
             reply(reply_token,
                   f"✅ ลงทะเบียนตัวเองเรียบร้อยแล้วครับ\n"
                   f"IUX ID: {iux_id}\n"
-                  f"คุณจะได้รับ Daily Signal ทุกเช้า 8:00 น. ด้วยครับ 📊")
+                  f"พิมพ์ /signal เพื่อดู signal ทองคำประจำวันได้เลยครับ 📊")
         except Exception as e:
             reply(reply_token, f"❌ Error: {str(e)}")
 

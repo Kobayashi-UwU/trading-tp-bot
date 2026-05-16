@@ -80,7 +80,8 @@ def _notify_all_admins(text: str, db=None) -> None:
                 try:
                     fb_send(admin["user_id"], text)
                 except Exception as e:
-                    logger.error("FB admin notify failed uid=%s: %s", admin["user_id"], e)
+                    logger.error(
+                        "FB admin notify failed uid=%s: %s", admin["user_id"], e)
     except Exception as e:
         logger.error("get_admin_users failed: %s", e)
 
@@ -174,7 +175,7 @@ def handle_fb_optin(psid: str, token: str, db) -> None:
     db.upsert_user(psid, platform=PLATFORM, notification_token=token)
     logger.info(f"FB Recurring Notifications opt-in stored for {psid}")
     fb_send(
-        psid, "✅ ขอบคุณครับ! คุณจะได้รับ Daily Signal ทุกเช้า 8:00 น. โดยอัตโนมัติ 📈")
+        psid, "✅ ขอบคุณครับ! พิมพ์ /signal เพื่อดู signal ทองคำประจำวันได้เลยครับ (วันละ 1 ครั้ง) 📊")
 
 
 # ---------------------------------------------------------------------------
@@ -254,8 +255,10 @@ def _handle_done(psid: str, db, user: dict) -> None:
 
     if status == "verified":
         if not user.get("notification_token"):
-            db.upsert_user(psid, platform=PLATFORM, notification_token="ENGAGED")
-        fb_send(psid, "📊 พิมพ์ /signal เพื่อดู signal ทองคำประจำวันได้เลยครับ (วันละ 1 ครั้ง)")
+            db.upsert_user(psid, platform=PLATFORM,
+                           notification_token="ENGAGED")
+        fb_send(
+            psid, "📊 พิมพ์ /signal เพื่อดู signal ทองคำประจำวันได้เลยครับ (วันละ 1 ครั้ง)")
         return
 
     if status == "rejected":
@@ -336,7 +339,8 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
                     try:
                         fb_send_recurring_opt_in(u["user_id"])
                     except Exception as e:
-                        logger.warning("Could not send recurring opt-in to %s: %s", u["user_id"], e)
+                        logger.warning(
+                            "Could not send recurring opt-in to %s: %s", u["user_id"], e)
             platforms = ", ".join(u["platform"] for u in users)
             send(f"✅ Verified IUX ID: {arg} ({platforms})")
         else:
@@ -366,13 +370,17 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
             return
         old_id, new_id = parts_arg
         users = db.get_all_users_by_iux_id(old_id)
-        real_users = [u for u in users if not u["user_id"].startswith("MANUAL_")]
+        real_users = [
+            u for u in users if not u["user_id"].startswith("MANUAL_")]
         all_targets = real_users if real_users else users  # prefer real over MANUAL_
         if all_targets:
             for u in all_targets:
-                db.update_iux_id(u["user_id"], new_id, platform=u.get("platform", "line"))
-            platforms = ", ".join(u.get("platform", "line") for u in all_targets)
-            send(f"✅ อัปเดต IUX ID เรียบร้อย ({len(all_targets)} record)\nเก่า: {old_id}\nใหม่: {new_id}\nPlatform: {platforms}")
+                db.update_iux_id(u["user_id"], new_id,
+                                 platform=u.get("platform", "line"))
+            platforms = ", ".join(u.get("platform", "line")
+                                  for u in all_targets)
+            send(
+                f"✅ อัปเดต IUX ID เรียบร้อย ({len(all_targets)} record)\nเก่า: {old_id}\nใหม่: {new_id}\nPlatform: {platforms}")
         else:
             send(f"❌ ไม่พบ IUX ID: {old_id} ในระบบ")
 
