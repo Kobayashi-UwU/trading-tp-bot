@@ -493,11 +493,18 @@ def _handle_user_signal(user: dict, reply_token: str) -> None:
     from signal_gen import generate_gold_analysis
     try:
         signal = generate_gold_analysis()
-        db.upsert_user(user["user_id"], platform="line", last_signal_date=today)
-        reply(reply_token, signal)
     except Exception as e:
         logger.error("Signal generation failed for %s: %s", user["user_id"], e)
-        reply(reply_token, f"❌ Generate signal ล้มเหลว กรุณาลองใหม่อีกครั้งครับ")
+        reply(reply_token, "❌ Generate signal ล้มเหลว กรุณาลองใหม่อีกครั้งครับ")
+        return
+
+    if len(signal) < 200:
+        logger.warning("Signal too short for %s (%d chars) — not counting as used", user["user_id"], len(signal))
+        reply(reply_token, signal + "\n\n⚠️ Signal ไม่สมบูรณ์ กรุณาลองพิมพ์ /signal ใหม่ได้เลยครับ")
+        return
+
+    db.upsert_user(user["user_id"], platform="line", last_signal_date=today)
+    reply(reply_token, signal)
 
 
 # ---------------------------------------------------------------------------

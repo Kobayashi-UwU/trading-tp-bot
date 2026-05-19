@@ -293,11 +293,21 @@ def _handle_fb_user_signal(psid: str, user: dict, db) -> None:
     from signal_gen import generate_gold_analysis
     try:
         signal = generate_gold_analysis()
-        db.upsert_user(psid, platform=PLATFORM, last_signal_date=today)
-        fb_send(psid, signal)
     except Exception as e:
         logger.error("Signal generation failed for %s: %s", psid, e)
         fb_send(psid, "❌ Generate signal ล้มเหลว กรุณาลองใหม่อีกครั้งครับ")
+        return
+
+    # Only count as "used" when the signal is complete enough to be useful.
+    # A valid signal always contains entry/TP/SL numbers; anything shorter
+    # than 200 chars is considered incomplete and should not consume the quota.
+    if len(signal) < 200:
+        logger.warning("Signal too short for %s (%d chars) — not counting as used", psid, len(signal))
+        fb_send(psid, signal + "\n\n⚠️ Signal ไม่สมบูรณ์ กรุณาลองพิมพ์ /signal ใหม่ได้เลยครับ")
+        return
+
+    db.upsert_user(psid, platform=PLATFORM, last_signal_date=today)
+    fb_send(psid, signal)
 
 
 # ---------------------------------------------------------------------------
