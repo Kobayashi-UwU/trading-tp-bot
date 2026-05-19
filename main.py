@@ -147,7 +147,17 @@ def fb_webhook():
             if not psid:
                 continue
             logger.info("FB event psid=%s keys=%s", psid, list(event.keys()))
-            events_to_process.append((psid, event))
+            events_to_process.append(("messaging", psid, event))
+
+        # Standby events fire when the bot is in standby mode (e.g. after an
+        # admin sends a message via Business Suite / Inbox).  We reclaim thread
+        # control so subsequent user messages are routed back to the bot.
+        for event in entry.get("standby", []):
+            psid = event.get("sender", {}).get("id")
+            if not psid:
+                continue
+            logger.info("FB standby event psid=%s keys=%s", psid, list(event.keys()))
+            events_to_process.append(("standby", psid, event))
 
     if events_to_process:
         threading.Thread(
@@ -161,8 +171,21 @@ def fb_webhook():
 
 def _process_fb_events(events: list) -> None:
     """Process Facebook webhook events in a background thread."""
-    for psid, event in events:
+    for event_type, psid, event in events:
         try:
+            if event_type == "standby":
+                # Bot is in standby – reclaim the thread so the user can be
+                # served.  Process the message normally; handle_fb_message
+                # calls take_thread_control as its first action.
+                text = event.get("message", {}).get("text", "").strip()
+                logger.info("FB standby message psid=%s text=%r — reclaiming thread", psid, text)
+                if text:
+                    facebook_handler.handle_fb_message(psid, text, db, configuration)
+                else:
+                    from facebook_messenger import take_thread_control
+                    take_thread_control(psid)
+                continue
+
             if "message" in event and not event["message"].get("is_echo"):
                 text = event["message"].get("text", "").strip()
                 logger.info("FB message psid=%s text=%r", psid, text)
