@@ -162,9 +162,10 @@ def get_gold_data() -> dict:
 logger = logging.getLogger(__name__)
 
 _MODELS = [
-    "gemini-flash-latest",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
+    "gemini-flash-latest",       # First choice — may 503 under high demand
+    "gemini-2.5-flash",          # Newer model, good availability
+    "gemini-2.0-flash",          # Stable fallback
+    "gemini-flash-lite-latest",  # Lite version — most available
 ]
 
 
