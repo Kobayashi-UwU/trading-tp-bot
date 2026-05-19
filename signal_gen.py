@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime
 
 import requests
@@ -160,15 +161,23 @@ def get_gold_data() -> dict:
 def _gemini(prompt: str, max_tokens: int = 800) -> str:
     api_key = os.environ["GEMINI_API_KEY"]
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
-    resp = requests.post(
-        url,
-        headers={"Content-Type": "application/json",
-                 "X-goog-api-key": api_key},
-        json={"contents": [{"parts": [{"text": prompt}]}]},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": max_tokens},
+    }
+    headers = {"Content-Type": "application/json", "X-goog-api-key": api_key}
+
+    for attempt in range(3):
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        if resp.status_code in (429, 500, 502, 503, 504) and attempt < 2:
+            wait = 4 ** attempt  # 1s, 4s
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+    resp.raise_for_status()  # should not reach here, satisfies type checker
+    return ""
 
 
 def _get_session_info(now_bkk) -> str:
