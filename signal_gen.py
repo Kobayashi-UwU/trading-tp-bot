@@ -161,54 +161,48 @@ def get_gold_data() -> dict:
 
 logger = logging.getLogger(__name__)
 
-_MODELS = [
-    "gemini-flash-latest",       # First choice — may 503 under high demand
-    "gemini-2.5-flash",          # Newer model, good availability
-    "gemini-2.0-flash",          # Stable fallback
-    "gemini-flash-lite-latest",  # Lite version — most available
-]
+_MODEL = "gemini-2.5-flash"  # Best free-tier model; no fallback to weaker models
 
 
 def _gemini(prompt: str, max_tokens: int = 800) -> str:
     api_key = os.environ["GEMINI_API_KEY"]
-    base = "https://generativelanguage.googleapis.com/v1beta/models"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{_MODEL}:generateContent"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"maxOutputTokens": max_tokens},
     }
     headers = {"Content-Type": "application/json", "X-goog-api-key": api_key}
 
-    last_exc: Exception = RuntimeError("No model attempted")
-    for model in _MODELS:
-        url = f"{base}/{model}:generateContent"
-        for attempt in range(3):
-            try:
-                resp = requests.post(url, headers=headers, json=payload, timeout=25)
-            except requests.exceptions.Timeout:
-                logger.warning("Gemini timeout model=%s attempt=%d", model, attempt)
-                last_exc = requests.exceptions.Timeout(f"Timeout on {model}")
-                if attempt < 2:
-                    time.sleep(4 ** attempt)
-                continue
-            except requests.exceptions.RequestException as e:
-                logger.warning("Gemini request error model=%s: %s", model, e)
-                last_exc = e
-                break
+    last_exc: Exception = RuntimeError("No attempt made")
+    for attempt in range(3):
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=25)
+        except requests.exceptions.Timeout:
+            logger.warning("Gemini timeout attempt=%d", attempt)
+            last_exc = requests.exceptions.Timeout(f"Timeout on {_MODEL} attempt {attempt}")
+            if attempt < 2:
+                time.sleep(4 ** attempt)
+            continue
+        except requests.exceptions.RequestException as e:
+            logger.warning("Gemini request error: %s", e)
+            raise
 
-            if resp.status_code in (429, 500, 502, 503, 504):
-                logger.warning(
-                    "Gemini %d model=%s attempt=%d body=%.200s",
-                    resp.status_code, model, attempt, resp.text,
-                )
-                last_exc = requests.exceptions.HTTPError(
-                    f"{resp.status_code} from {model}", response=resp
-                )
-                if attempt < 2:
-                    time.sleep(4 ** attempt)
-                continue
+        if resp.status_code in (429, 500, 502, 503, 504):
+            logger.warning(
+                "Gemini %d attempt=%d body=%.200s",
+                resp.status_code, attempt, resp.text,
+            )
+            last_exc = requests.exceptions.HTTPError(
+                f"{resp.status_code} from {_MODEL}", response=resp
+            )
+            if attempt < 2:
+                time.sleep(4 ** attempt)
+            continue
 
-            resp.raise_for_status()
-            return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        resp.raise_for_status()
+        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        logger.info("Gemini OK model=%s len=%d", _MODEL, len(text))
+        return text
 
     raise last_exc
 
@@ -240,7 +234,14 @@ def generate_gold_analysis() -> str:
 
     data = get_gold_data()
     if not data:
+        logger.warning("generate_gold_analysis: get_gold_data() returned empty — yfinance may be down")
         return "❌ ไม่สามารถดึงข้อมูลราคาทองได้ในขณะนี้ครับ"
+
+    logger.info(
+        "generate_gold_analysis data: price=%.2f rsi_1h=%.1f macd_hist=%.4f dxy=%.3f",
+        data.get("price", 0), data.get("rsi_1h", 0),
+        data.get("macd_hist", 0), data.get("dxy", 0),
+    )
 
     def fmt_chg(v, decimals=2):
         return f"+{v:.{decimals}f}%" if v >= 0 else f"{v:.{decimals}f}%"
@@ -358,6 +359,7 @@ def generate_signal() -> str:
     today = datetime.now(bangkok).strftime("%d %b %Y")
 
     market_data = get_market_data()
+    logger.info("generate_signal market_data=%r", market_data)
 
     prompt = f"""คุณเป็น AI Trading Analyst ของช่อง TradingTP
 
