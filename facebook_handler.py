@@ -279,6 +279,12 @@ def _handle_done(psid: str, db, user: dict) -> None:
 # User /signal handler
 # ---------------------------------------------------------------------------
 
+_BUSY_MSG = (
+    "⏳ ขณะนี้มีผู้ใช้งานระบบ AI จำนวนมาก\n"
+    "กรุณาลองพิมพ์ /signal ใหม่อีกครั้งในอีก 1-2 นาทีครับ 🙏"
+)
+
+
 def _handle_fb_user_signal(psid: str, user: dict, db) -> None:
     """Handle /signal command for a verified Facebook user — one request per day."""
     import pytz
@@ -295,15 +301,15 @@ def _handle_fb_user_signal(psid: str, user: dict, db) -> None:
         signal = generate_gold_analysis()
     except Exception as e:
         logger.error("Signal generation failed for %s: %s", psid, e)
-        fb_send(psid, "❌ Generate signal ล้มเหลว กรุณาลองใหม่อีกครั้งครับ")
+        fb_send(psid, _BUSY_MSG)
         return
 
     # Only count as "used" when the signal is complete enough to be useful.
     # A valid signal always contains entry/TP/SL numbers; anything shorter
-    # than 200 chars is considered incomplete and should not consume the quota.
+    # than 200 chars is considered incomplete — do not consume the daily quota.
     if len(signal) < 200:
         logger.warning("Signal too short for %s (%d chars) — not counting as used", psid, len(signal))
-        fb_send(psid, signal + "\n\n⚠️ Signal ไม่สมบูรณ์ กรุณาลองพิมพ์ /signal ใหม่ได้เลยครับ")
+        fb_send(psid, _BUSY_MSG)
         return
 
     db.upsert_user(psid, platform=PLATFORM, last_signal_date=today)

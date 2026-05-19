@@ -479,6 +479,12 @@ def _handle_done(user: dict, reply_token: str) -> None:
 # User signal request handler
 # ---------------------------------------------------------------------------
 
+_BUSY_MSG = (
+    "⏳ ขณะนี้มีผู้ใช้งานระบบ AI จำนวนมาก\n"
+    "กรุณาลองพิมพ์ /signal ใหม่อีกครั้งในอีก 1-2 นาทีครับ 🙏"
+)
+
+
 def _handle_user_signal(user: dict, reply_token: str) -> None:
     """Handle /signal command for a verified LINE user — one request per day."""
     import pytz
@@ -495,12 +501,12 @@ def _handle_user_signal(user: dict, reply_token: str) -> None:
         signal = generate_gold_analysis()
     except Exception as e:
         logger.error("Signal generation failed for %s: %s", user["user_id"], e)
-        reply(reply_token, "❌ Generate signal ล้มเหลว กรุณาลองใหม่อีกครั้งครับ")
+        reply(reply_token, _BUSY_MSG)
         return
 
     if len(signal) < 200:
         logger.warning("Signal too short for %s (%d chars) — not counting as used", user["user_id"], len(signal))
-        reply(reply_token, signal + "\n\n⚠️ Signal ไม่สมบูรณ์ กรุณาลองพิมพ์ /signal ใหม่ได้เลยครับ")
+        reply(reply_token, _BUSY_MSG)
         return
 
     db.upsert_user(user["user_id"], platform="line", last_signal_date=today)
