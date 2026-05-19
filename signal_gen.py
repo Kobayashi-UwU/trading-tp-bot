@@ -161,7 +161,7 @@ def get_gold_data() -> dict:
 
 logger = logging.getLogger(__name__)
 
-_MODEL = "gemini-2.5-flash"  # Best free-tier model; no fallback to weaker models
+_MODEL = "gemini-flash-latest"  # Google AI Studio: "Gemini 3 Flash"
 
 
 def _gemini(prompt: str, max_tokens: int = 800) -> str:
@@ -173,15 +173,13 @@ def _gemini(prompt: str, max_tokens: int = 800) -> str:
     }
     headers = {"Content-Type": "application/json", "X-goog-api-key": api_key}
 
-    last_exc: Exception = RuntimeError("No attempt made")
     for attempt in range(3):
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=25)
+            resp = requests.post(url, headers=headers, json=payload, timeout=30)
         except requests.exceptions.Timeout:
             logger.warning("Gemini timeout attempt=%d", attempt)
-            last_exc = requests.exceptions.Timeout(f"Timeout on {_MODEL} attempt {attempt}")
             if attempt < 2:
-                time.sleep(4 ** attempt)
+                time.sleep(5)
             continue
         except requests.exceptions.RequestException as e:
             logger.warning("Gemini request error: %s", e)
@@ -192,19 +190,16 @@ def _gemini(prompt: str, max_tokens: int = 800) -> str:
                 "Gemini %d attempt=%d body=%.200s",
                 resp.status_code, attempt, resp.text,
             )
-            last_exc = requests.exceptions.HTTPError(
-                f"{resp.status_code} from {_MODEL}", response=resp
-            )
             if attempt < 2:
-                time.sleep(4 ** attempt)
+                time.sleep(5)
             continue
 
         resp.raise_for_status()
         text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-        logger.info("Gemini OK model=%s len=%d", _MODEL, len(text))
+        logger.info("Gemini OK len=%d", len(text))
         return text
 
-    raise last_exc
+    raise RuntimeError(f"Gemini {_MODEL} ไม่ตอบสนองหลังลอง 3 ครั้ง")
 
 
 def _get_session_info(now_bkk) -> str:
