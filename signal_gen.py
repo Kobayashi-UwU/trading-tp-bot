@@ -161,61 +161,90 @@ def get_gold_data() -> dict:
 
 logger = logging.getLogger(__name__)
 
-_MODEL = "gemini-flash-latest"  # Google AI Studio: "Gemini 3 Flash"
+# Fallback chain — best quality first, then larger-quota fallbacks.
+# Free-tier daily limits (RPD):
+#   gemini-flash-latest      = Gemini 3 Flash       (20/day,   highest quality, thinking)
+#   gemini-2.5-flash         = Gemini 2.5 Flash     (20/day,   good quality,    thinking)
+#   gemini-3.1-flash-lite    = Gemini 3.1 Flash Lite (500/day, decent quality,  no thinking)
+_MODELS = [
+    "gemini-flash-latest",
+    "gemini-2.5-flash",
+    "gemini-3.1-flash-lite",
+]
 
 
-def _gemini(prompt: str, max_tokens: int = 3000) -> str:
-    # Gemini 3 Flash uses ~900-1100 tokens for internal "thinking" before
-    # producing output. maxOutputTokens covers BOTH thinking + final text,
-    # so 3000 ≈ 1100 thinking + ~1900 actual output tokens.
-    # Lower values (e.g. 900) leave too few tokens for output → MAX_TOKENS
-    # finish reason with ~95-char truncated reply.
+def _try_gemini_once(model, payload, headers):
+    """Single API call. Returns (text, status) where status is one of:
+       'ok', 'short', 'quota', 'overload', 'timeout', 'error'.
+       text is non-None only when status == 'ok'.
+    """
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+    except requests.exceptions.Timeout:
+        return None, "timeout"
+    except requests.exceptions.RequestException as e:
+        logger.warning("Gemini %s request error: %s", model, e)
+        return None, "error"
+
+    if resp.status_code == 429:
+        logger.warning("Gemini %s quota exhausted (429): %.200s", model, resp.text)
+        return None, "quota"
+    if resp.status_code in (500, 502, 503, 504):
+        logger.warning("Gemini %s %d: %.200s", model, resp.status_code, resp.text)
+        return None, "overload"
+    if not resp.ok:
+        logger.warning("Gemini %s %d: %.200s", model, resp.status_code, resp.text)
+        return None, "error"
+
+    candidate = resp.json()["candidates"][0]
+    text = candidate.get("content", {}).get("parts", [{}])[0].get("text", "")
+    finish = candidate.get("finishReason", "STOP")
+
+    # MAX_TOKENS with short output = throttling, treat as failure so we fall back.
+    if finish == "MAX_TOKENS" and len(text) < 200:
+        logger.warning("Gemini %s MAX_TOKENS but only %d chars", model, len(text))
+        return None, "short"
+
+    logger.info("Gemini OK model=%s len=%d finish=%s", model, len(text), finish)
+    return text, "ok"
+
+
+def _gemini(prompt: str, max_tokens: int = 6000) -> str:
+    """Call Gemini with a multi-model fallback chain.
+
+    maxOutputTokens covers BOTH internal "thinking" + final reply text.
+    Observed thinking usage on TradingTP prompts:
+      Gemini 3 Flash      : ~1000-1100 tokens
+      Gemini 2.5 Flash    : ~2200-2900 tokens (heavier!)
+      Gemini 3.1 Flash Lite: 0 (no thinking)
+    6000 covers all three with a safe output budget.
+
+    Strategy per model:
+      - 429 (quota) → skip to next model immediately, no retries
+      - 5xx / timeout / short output → retry up to 2 times, then next model
+      - 4xx other than 429 → skip to next model
+    """
     api_key = os.environ["GEMINI_API_KEY"]
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{_MODEL}:generateContent"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"maxOutputTokens": max_tokens},
     }
     headers = {"Content-Type": "application/json", "X-goog-api-key": api_key}
 
-    for attempt in range(3):
-        try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=30)
-        except requests.exceptions.Timeout:
-            logger.warning("Gemini timeout attempt=%d", attempt)
+    for model in _MODELS:
+        for attempt in range(3):
+            text, status = _try_gemini_once(model, payload, headers)
+            if status == "ok":
+                return text
+            if status == "quota" or status == "error":
+                # No point retrying same model — quota is daily / non-transient.
+                break
+            # Transient failures: overload / timeout / short → retry
             if attempt < 2:
-                time.sleep(5)
-            continue
-        except requests.exceptions.RequestException as e:
-            logger.warning("Gemini request error: %s", e)
-            raise
+                time.sleep(3)
 
-        if resp.status_code in (429, 500, 502, 503, 504):
-            logger.warning(
-                "Gemini %d attempt=%d body=%.200s",
-                resp.status_code, attempt, resp.text,
-            )
-            if attempt < 2:
-                time.sleep(5)
-            continue
-
-        resp.raise_for_status()
-        candidate = resp.json()["candidates"][0]
-        text = candidate["content"]["parts"][0]["text"]
-        finish = candidate.get("finishReason", "STOP")
-        logger.info("Gemini OK len=%d finishReason=%s", len(text), finish)
-
-        # MAX_TOKENS with very short text = Google silently throttling output.
-        # Retry so the caller's 200-char guard can send a friendly busy message.
-        if finish == "MAX_TOKENS" and len(text) < 200:
-            logger.warning("Gemini MAX_TOKENS but only %d chars — treating as incomplete, retrying", len(text))
-            if attempt < 2:
-                time.sleep(5)
-            continue
-
-        return text
-
-    raise RuntimeError(f"Gemini {_MODEL} returned incomplete output after 3 attempts")
+    raise RuntimeError("Gemini ทุก model ใช้งานไม่ได้ (quota หมดหรือ overload)")
 
 
 def _get_session_info(now_bkk) -> str:
@@ -360,7 +389,7 @@ US10Y Bond Yield  : {data.get('us10y', 0):.3f}%  (เปลี่ยน 24h: {da
 ⚠️ เนื้อหานี้เป็นเพียงข้อมูลการวิเคราะห์จาก AI
 การเทรดมีความเสี่ยง โปรดตัดสินใจด้วยตัวเองก่อนเข้าเทรด"""
 
-    return _gemini(prompt, max_tokens=3000)
+    return _gemini(prompt, max_tokens=6000)
 
 
 def generate_signal() -> str:
@@ -409,4 +438,4 @@ def generate_signal() -> str:
 ⚠️ เนื้อหานี้เป็นเพียงข้อมูลการวิเคราะห์จาก AI
 การเทรดมีความเสี่ยง โปรดตัดสินใจด้วยตัวเองก่อนเข้าเทรด"""
 
-    return _gemini(prompt, max_tokens=3000)
+    return _gemini(prompt, max_tokens=6000)
