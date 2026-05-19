@@ -164,7 +164,12 @@ logger = logging.getLogger(__name__)
 _MODEL = "gemini-flash-latest"  # Google AI Studio: "Gemini 3 Flash"
 
 
-def _gemini(prompt: str, max_tokens: int = 800) -> str:
+def _gemini(prompt: str, max_tokens: int = 3000) -> str:
+    # Gemini 3 Flash uses ~900-1100 tokens for internal "thinking" before
+    # producing output. maxOutputTokens covers BOTH thinking + final text,
+    # so 3000 ≈ 1100 thinking + ~1900 actual output tokens.
+    # Lower values (e.g. 900) leave too few tokens for output → MAX_TOKENS
+    # finish reason with ~95-char truncated reply.
     api_key = os.environ["GEMINI_API_KEY"]
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{_MODEL}:generateContent"
     payload = {
@@ -355,7 +360,7 @@ US10Y Bond Yield  : {data.get('us10y', 0):.3f}%  (เปลี่ยน 24h: {da
 ⚠️ เนื้อหานี้เป็นเพียงข้อมูลการวิเคราะห์จาก AI
 การเทรดมีความเสี่ยง โปรดตัดสินใจด้วยตัวเองก่อนเข้าเทรด"""
 
-    return _gemini(prompt, max_tokens=900)
+    return _gemini(prompt, max_tokens=3000)
 
 
 def generate_signal() -> str:
@@ -404,4 +409,4 @@ def generate_signal() -> str:
 ⚠️ เนื้อหานี้เป็นเพียงข้อมูลการวิเคราะห์จาก AI
 การเทรดมีความเสี่ยง โปรดตัดสินใจด้วยตัวเองก่อนเข้าเทรด"""
 
-    return _gemini(prompt, max_tokens=600)
+    return _gemini(prompt, max_tokens=3000)
