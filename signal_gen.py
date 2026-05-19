@@ -195,11 +195,22 @@ def _gemini(prompt: str, max_tokens: int = 800) -> str:
             continue
 
         resp.raise_for_status()
-        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-        logger.info("Gemini OK len=%d", len(text))
+        candidate = resp.json()["candidates"][0]
+        text = candidate["content"]["parts"][0]["text"]
+        finish = candidate.get("finishReason", "STOP")
+        logger.info("Gemini OK len=%d finishReason=%s", len(text), finish)
+
+        # MAX_TOKENS with very short text = Google silently throttling output.
+        # Retry so the caller's 200-char guard can send a friendly busy message.
+        if finish == "MAX_TOKENS" and len(text) < 200:
+            logger.warning("Gemini MAX_TOKENS but only %d chars — treating as incomplete, retrying", len(text))
+            if attempt < 2:
+                time.sleep(5)
+            continue
+
         return text
 
-    raise RuntimeError(f"Gemini {_MODEL} ไม่ตอบสนองหลังลอง 3 ครั้ง")
+    raise RuntimeError(f"Gemini {_MODEL} returned incomplete output after 3 attempts")
 
 
 def _get_session_info(now_bkk) -> str:
