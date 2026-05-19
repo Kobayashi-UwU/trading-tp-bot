@@ -10,36 +10,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-PAIRS = {
-    "XAUUSD": "GC=F",
-    # "EURUSD": "EURUSD=X",
-    # "GBPUSD": "GBPUSD=X",
-    # "USDJPY": "JPY=X",
-    # "BTCUSD": "BTC-USD",
-}
-
-
-def get_market_data() -> str:
-    lines = []
-    for name, ticker in PAIRS.items():
-        try:
-            df = yf.download(ticker, period="3d",
-                             interval="1h", progress=False)
-            if df.empty:
-                continue
-            close = df["Close"].dropna()
-            latest = float(
-                close.iloc[-1].iloc[0]) if hasattr(close.iloc[-1], 'iloc') else float(close.iloc[-1])
-            prev = float(
-                close.iloc[-2].iloc[0]) if hasattr(close.iloc[-2], 'iloc') else float(close.iloc[-2])
-            change_pct = (latest - prev) / prev * 100
-            sign = "+" if change_pct >= 0 else ""
-            lines.append(f"  {name}: {latest:.4f}  ({sign}{change_pct:.2f}%)")
-        except Exception:
-            pass
-    return "\n".join(lines) if lines else "ไม่สามารถดึงข้อมูลตลาดได้"
-
-
 def _s(v):
     """แปลง Series element เป็น float อย่างปลอดภัย"""
     if hasattr(v, 'iloc'):
@@ -392,50 +362,3 @@ US10Y Bond Yield  : {data.get('us10y', 0):.3f}%  (เปลี่ยน 24h: {da
     return _gemini(prompt, max_tokens=6000)
 
 
-def generate_signal() -> str:
-    affiliate_link = os.environ.get("IUX_AFFILIATE_LINK", "https://iux.com")
-
-    bangkok = pytz.timezone("Asia/Bangkok")
-    today = datetime.now(bangkok).strftime("%d %b %Y")
-
-    market_data = get_market_data()
-    logger.info("generate_signal market_data=%r", market_data)
-
-    prompt = f"""คุณเป็น AI Trading Analyst ของช่อง TradingTP
-
-ข้อมูลราคาตลาดล่าสุด (เทียบกับชั่วโมงก่อน):
-{market_data}
-
-วันที่: {today}
-
-วิเคราะห์และเลือก 1 pair ที่มี setup ที่ดีที่สุดในวันนี้ แล้วสร้าง Daily Morning Signal ภาษาไทย
-โดยให้ข้อมูลดังนี้:
-1. Pair ที่เลือก และ Bias (Bullish / Bearish)
-2. เหตุผลประกอบ 2-3 บรรทัด (กระชับ ชัดเจน)
-3. Entry Zone, Take Profit, Stop Loss (เป็นตัวเลขราคา)
-4. ระดับ Risk (Low / Medium / High)
-
-ใช้ format นี้เท่านั้น:
-
-📊 TradingTP Morning Signal — {today}
-
-🔥 Pair: [PAIR]
-📈 Bias: [Bullish/Bearish]
-
-[เหตุผล 2-3 บรรทัด]
-
-✅ Setup แนะนำ:
-• [Buy/Sell] Zone: [ราคา]
-• TP: [ราคา]
-• SL: [ราคา]
-
-⚠️ Risk: [Low/Medium/High]
-
-───────────────
-เทรดผ่าน IUX รับ spread ต่ำสุด
-👉 สมัครฟรี: {affiliate_link}
-
-⚠️ เนื้อหานี้เป็นเพียงข้อมูลการวิเคราะห์จาก AI
-การเทรดมีความเสี่ยง โปรดตัดสินใจด้วยตัวเองก่อนเข้าเทรด"""
-
-    return _gemini(prompt, max_tokens=6000)

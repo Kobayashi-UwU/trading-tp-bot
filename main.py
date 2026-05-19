@@ -686,12 +686,13 @@ def _handle_admin(text: str, reply_token: str) -> None:
         )
 
     elif cmd == "/signal":
-        reply(reply_token, "⏳ กำลัง generate signal... รอแป๊บนึงครับ")
-        from signal_gen import generate_signal
+        reply(reply_token, "⏳ กำลังวิเคราะห์ทองคำ รอแป๊บนึงครับ...")
+        from signal_gen import generate_gold_analysis
         try:
-            signal = generate_signal()
+            signal = generate_gold_analysis()
             push(ADMIN_LINE_USER_ID, signal)
         except Exception as e:
+            logger.error("Admin signal failed: %s", e)
             push(ADMIN_LINE_USER_ID, f"❌ Generate signal ล้มเหลว: {e}")
 
     elif cmd == "/dailycheck":

@@ -492,10 +492,10 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
             send(f"❌ วิเคราะห์ทองไม่สำเร็จ: {e}")
 
     elif cmd == "/signal":
-        send("⏳ กำลัง generate signal... รอแป๊บนึงครับ")
-        from signal_gen import generate_signal
+        send("⏳ กำลังวิเคราะห์ทองคำ รอแป๊บนึงครับ...")
+        from signal_gen import generate_gold_analysis
         try:
-            signal = generate_signal()
+            signal = generate_gold_analysis()
             fb_send(psid, signal)
         except Exception as e:
             logger.error("Admin signal failed psid=%s: %s", psid, e)
