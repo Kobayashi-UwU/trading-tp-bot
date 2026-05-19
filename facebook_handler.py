@@ -472,6 +472,7 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
             analysis = generate_gold_analysis()
             fb_send(psid, analysis)
         except Exception as e:
+            logger.error("Admin dailycheck failed psid=%s: %s", psid, e)
             send(f"❌ วิเคราะห์ทองไม่สำเร็จ: {e}")
 
     elif cmd == "/signal":
@@ -481,6 +482,7 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
             signal = generate_signal()
             fb_send(psid, signal)
         except Exception as e:
+            logger.error("Admin signal failed psid=%s: %s", psid, e)
             send(f"❌ Generate signal ล้มเหลว: {e}")
 
     elif cmd == "/help":

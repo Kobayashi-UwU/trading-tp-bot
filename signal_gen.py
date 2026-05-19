@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 from datetime import datetime
@@ -158,26 +159,57 @@ def get_gold_data() -> dict:
     return result
 
 
+logger = logging.getLogger(__name__)
+
+_MODELS = [
+    "gemini-flash-latest",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+]
+
+
 def _gemini(prompt: str, max_tokens: int = 800) -> str:
     api_key = os.environ["GEMINI_API_KEY"]
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+    base = "https://generativelanguage.googleapis.com/v1beta/models"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"maxOutputTokens": max_tokens},
     }
     headers = {"Content-Type": "application/json", "X-goog-api-key": api_key}
 
-    for attempt in range(3):
-        resp = requests.post(url, headers=headers, json=payload, timeout=30)
-        if resp.status_code in (429, 500, 502, 503, 504) and attempt < 2:
-            wait = 4 ** attempt  # 1s, 4s
-            time.sleep(wait)
-            continue
-        resp.raise_for_status()
-        return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+    last_exc: Exception = RuntimeError("No model attempted")
+    for model in _MODELS:
+        url = f"{base}/{model}:generateContent"
+        for attempt in range(3):
+            try:
+                resp = requests.post(url, headers=headers, json=payload, timeout=25)
+            except requests.exceptions.Timeout:
+                logger.warning("Gemini timeout model=%s attempt=%d", model, attempt)
+                last_exc = requests.exceptions.Timeout(f"Timeout on {model}")
+                if attempt < 2:
+                    time.sleep(4 ** attempt)
+                continue
+            except requests.exceptions.RequestException as e:
+                logger.warning("Gemini request error model=%s: %s", model, e)
+                last_exc = e
+                break
 
-    resp.raise_for_status()  # should not reach here, satisfies type checker
-    return ""
+            if resp.status_code in (429, 500, 502, 503, 504):
+                logger.warning(
+                    "Gemini %d model=%s attempt=%d body=%.200s",
+                    resp.status_code, model, attempt, resp.text,
+                )
+                last_exc = requests.exceptions.HTTPError(
+                    f"{resp.status_code} from {model}", response=resp
+                )
+                if attempt < 2:
+                    time.sleep(4 ** attempt)
+                continue
+
+            resp.raise_for_status()
+            return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+    raise last_exc
 
 
 def _get_session_info(now_bkk) -> str:
