@@ -54,21 +54,29 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE;
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS user_role TEXT DEFAULT NULL;
 
--- ─────────────────────────────────────────────────────────────────────────────
--- Explicit GRANTs (required from Oct 30, 2026 — Supabase Data API policy change)
--- Run ONLY after Oct 2026, or when fully ready to enforce RLS.
--- WARNING: enabling RLS without complete policies will block bot INSERTs.
--- ─────────────────────────────────────────────────────────────────────────────
--- GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO service_role;
--- GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO authenticated;
--- GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO anon;
+-- ═══════════════════════════════════════════════════════════════
+-- RLS HARDENING — รันหลังเปลี่ยน SUPABASE_KEY ใน Railway เป็น
+-- service_role key เรียบร้อยแล้ว
+-- ═══════════════════════════════════════════════════════════════
+-- WARNING: ห้ามรัน SQL ด้านล่างถ้าบอทยังใช้ anon key อยู่ —
+-- บอทจะ INSERT/SELECT ตารางไม่ได้ทันทีและพังหมด
 --
--- ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
---
--- CREATE POLICY IF NOT EXISTS "service_role full access"
---   ON public.users FOR ALL TO service_role
---   USING (true) WITH CHECK (true);
---
--- CREATE POLICY IF NOT EXISTS "anon full access"
---   ON public.users FOR ALL TO anon
---   USING (true) WITH CHECK (true);
+-- service_role key bypass RLS โดย default แม้ไม่มี policy
+-- anon / authenticated จะถูกบล็อกทั้งหมดเพราะไม่มี policy ให้
+-- ═══════════════════════════════════════════════════════════════
+
+-- 1. เปิด Row-Level Security
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+
+-- 2. ตัดสิทธิ์ที่ anon / authenticated เคยมีออกให้หมด
+REVOKE ALL ON public.users FROM anon;
+REVOKE ALL ON public.users FROM authenticated;
+
+-- 3. ให้ service_role มีสิทธิ์เต็ม (จริงๆ bypass RLS อยู่แล้ว
+--    แต่เขียนชัดเจนเพื่อกัน Supabase Data API policy เปลี่ยน Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO service_role;
+
+-- 4. ตรวจผล — ควรเห็น rowsecurity = true
+SELECT tablename, rowsecurity
+FROM pg_tables
+WHERE schemaname = 'public' AND tablename = 'users';
