@@ -79,8 +79,8 @@ def push_to_user(user: dict, text: str) -> None:
 
 
 def extract_iux_id(text: str) -> str | None:
-    """ดึงตัวเลข 6 หรือ 8 หลักจากข้อความ"""
-    matches = re.findall(r"\b(\d{6}|\d{8})\b", text)
+    """ดึงตัวเลข 5, 6 หรือ 8 หลักจากข้อความ"""
+    matches = re.findall(r"\b(\d{8}|\d{6}|\d{5})\b", text)
     return matches[0] if matches else None
 
 
@@ -288,7 +288,7 @@ def handle_follow(event):
         event.reply_token,
         "สวัสดีครับ! ยินดีต้อนรับสู่ TradingTP 🎉\n\n"
         "เพื่อรับ Daily Signal ฟรี / Prompt หรือ โค้ดต่างๆ กรุณาส่ง IUX User ID ของคุณมาได้เลยครับ\n\n"
-        "💡 IUX User ID คือตัวเลข 6 หรือ 8 หลักที่แสดงอยู่ในหน้า Profile ของ IUX ครับ\n\n"
+        "💡 IUX User ID คือตัวเลข 5, 6 หรือ 8 หลักที่แสดงอยู่ในหน้า Profile ของ IUX ครับ\n\n"
         "หรือหากยังไม่มีบัญชี IUX สามารถสมัครฟรีได้ที่ https://iux.com/en/register?code=IuyjFrlz เลยครับ\n\n"
         "สำหรับคนที่มีบัญชี iux อยู่แล้ว ต้องโอนย้ายก่อนนะครับตามลิงค์นี้\n"
         "👇👇👇\n"
