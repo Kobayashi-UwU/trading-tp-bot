@@ -56,7 +56,8 @@ def reply(reply_token: str, text: str) -> None:
     if not LINE_ENABLED:
         return
     messaging_api().reply_message(
-        ReplyMessageRequest(reply_token=reply_token, messages=[TextMessage(text=text)])
+        ReplyMessageRequest(reply_token=reply_token,
+                            messages=[TextMessage(text=text)])
     )
 
 
@@ -133,7 +134,8 @@ def fb_webhook():
         abort(400)
 
     data = request.get_json(silent=True) or {}
-    logger.info("FB webhook payload object=%s entries=%d", data.get("object"), len(data.get("entry", [])))
+    logger.info("FB webhook payload object=%s entries=%d",
+                data.get("object"), len(data.get("entry", [])))
 
     if data.get("object") != "page":
         return "OK"
@@ -156,7 +158,8 @@ def fb_webhook():
             psid = event.get("sender", {}).get("id")
             if not psid:
                 continue
-            logger.info("FB standby event psid=%s keys=%s", psid, list(event.keys()))
+            logger.info("FB standby event psid=%s keys=%s",
+                        psid, list(event.keys()))
             events_to_process.append(("standby", psid, event))
 
     if events_to_process:
@@ -178,9 +181,11 @@ def _process_fb_events(events: list) -> None:
                 # served.  Process the message normally; handle_fb_message
                 # calls take_thread_control as its first action.
                 text = event.get("message", {}).get("text", "").strip()
-                logger.info("FB standby message psid=%s text=%r — reclaiming thread", psid, text)
+                logger.info(
+                    "FB standby message psid=%s text=%r — reclaiming thread", psid, text)
                 if text:
-                    facebook_handler.handle_fb_message(psid, text, db, configuration)
+                    facebook_handler.handle_fb_message(
+                        psid, text, db, configuration)
                 else:
                     from facebook_messenger import take_thread_control
                     take_thread_control(psid)
@@ -190,18 +195,24 @@ def _process_fb_events(events: list) -> None:
                 text = event["message"].get("text", "").strip()
                 logger.info("FB message psid=%s text=%r", psid, text)
                 if text:
-                    facebook_handler.handle_fb_message(psid, text, db, configuration)
+                    facebook_handler.handle_fb_message(
+                        psid, text, db, configuration)
 
             elif "pass_thread_control" in event:
-                new_owner = event["pass_thread_control"].get("new_thread_owner_app_id", "")
-                logger.info("FB pass_thread_control psid=%s new_owner=%s", psid, new_owner)
+                new_owner = event["pass_thread_control"].get(
+                    "new_thread_owner_app_id", "")
+                logger.info(
+                    "FB pass_thread_control psid=%s new_owner=%s", psid, new_owner)
 
             elif "take_thread_control" in event:
-                prev_owner = event["take_thread_control"].get("previous_thread_owner_app_id", "")
-                logger.info("FB take_thread_control psid=%s prev_owner=%s", psid, prev_owner)
+                prev_owner = event["take_thread_control"].get(
+                    "previous_thread_owner_app_id", "")
+                logger.info(
+                    "FB take_thread_control psid=%s prev_owner=%s", psid, prev_owner)
 
             elif "request_thread_control" in event:
-                logger.info("FB request_thread_control psid=%s — ignoring", psid)
+                logger.info(
+                    "FB request_thread_control psid=%s — ignoring", psid)
 
             elif "optin" in event:
                 optin = event["optin"]
@@ -257,7 +268,7 @@ def privacy_policy():
 
 @app.route("/setup/facebook", methods=["GET"])
 def setup_facebook():
-    """Check Facebook page connection and webhook subscription status."""
+    """Check Facebook page connection and webhook subscription status"""
     token = os.environ.get("FB_PAGE_ACCESS_TOKEN", "")
     app_id = os.environ.get("FB_APP_ID", "")
     if not token:
@@ -315,7 +326,8 @@ def handle_unfollow(event):
 def handle_join(event):
     """Fired when the bot is added to a LINE group or room."""
     source = event.source
-    group_id = getattr(source, "group_id", None) or getattr(source, "room_id", None)
+    group_id = getattr(source, "group_id", None) or getattr(
+        source, "room_id", None)
     if not group_id:
         logger.warning("JoinEvent fired but could not extract group/room ID")
         return
@@ -388,7 +400,8 @@ def _handle_waiting_iux(user_id: str, text: str, reply_token: str) -> None:
     iux_id = extract_iux_id(text)
     if iux_id:
         db.upsert_user(user_id, pending_iux_id=iux_id, state="confirming")
-        reply(reply_token, f"IUX User ID: {iux_id} ใช่ไหมครับ? (พิมพ์ ใช่ หรือ ไม่)")
+        reply(reply_token,
+              f"IUX User ID: {iux_id} ใช่ไหมครับ? (พิมพ์ ใช่ หรือ ไม่)")
 
 
 def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) -> None:
@@ -420,7 +433,8 @@ def _handle_confirming(user_id: str, text: str, reply_token: str, user: dict) ->
                 f"✅ บันทึก IUX ID: {pending} เรียบร้อยครับ\n\n"
                 "⏳ รอ Admin ยืนยันสักครู่นะครับ 🙏",
             )
-            display_name = user.get("display_name") or get_display_name(user_id) or user_id
+            display_name = user.get(
+                "display_name") or get_display_name(user_id) or user_id
             notify_msg = (
                 f"🔔 มี User ใหม่รอยืนยัน!\n\n"
                 f"ชื่อ LINE  : {display_name}\n"
@@ -505,7 +519,8 @@ def _handle_user_signal(user: dict, reply_token: str) -> None:
         return
 
     if len(signal) < 200:
-        logger.warning("Signal too short for %s (%d chars) — not counting as used", user["user_id"], len(signal))
+        logger.warning(
+            "Signal too short for %s (%d chars) — not counting as used", user["user_id"], len(signal))
         reply(reply_token, _BUSY_MSG)
         return
 
@@ -578,14 +593,16 @@ def _handle_admin(text: str, reply_token: str) -> None:
         users = db.get_all_users_by_iux_id(arg)
         if users:
             for u in users:
-                db.upsert_user(u["user_id"], platform=u["platform"], status="verified")
+                db.upsert_user(
+                    u["user_id"], platform=u["platform"], status="verified")
                 push_to_user(u, _VERIFY_MSG)
                 if u.get("platform") == "facebook" and not u.get("notification_token"):
                     try:
                         from facebook_messenger import fb_send_recurring_opt_in
                         fb_send_recurring_opt_in(u["user_id"])
                     except Exception as e:
-                        logger.warning("Could not send recurring opt-in to %s: %s", u["user_id"], e)
+                        logger.warning(
+                            "Could not send recurring opt-in to %s: %s", u["user_id"], e)
             platforms = ", ".join(u["platform"] for u in users)
             reply(reply_token, f"✅ Verified IUX ID: {arg} ({platforms})")
         else:
@@ -595,7 +612,8 @@ def _handle_admin(text: str, reply_token: str) -> None:
         users = db.get_all_users_by_iux_id(arg)
         if users:
             for u in users:
-                db.upsert_user(u["user_id"], platform=u["platform"], status="rejected")
+                db.upsert_user(
+                    u["user_id"], platform=u["platform"], status="rejected")
                 push_to_user(
                     u,
                     "❌ IUX User ID ไม่ผ่านการยืนยันครับ\n\n"
@@ -609,16 +627,20 @@ def _handle_admin(text: str, reply_token: str) -> None:
     elif cmd == "/update" and arg:
         parts_arg = arg.split()
         if len(parts_arg) != 2:
-            reply(reply_token, "❌ รูปแบบไม่ถูกต้อง\nใช้: /update [iux_id_เก่า] [iux_id_ใหม่]")
+            reply(
+                reply_token, "❌ รูปแบบไม่ถูกต้อง\nใช้: /update [iux_id_เก่า] [iux_id_ใหม่]")
             return
         old_id, new_id = parts_arg
         users = db.get_all_users_by_iux_id(old_id)
-        real_users = [u for u in users if not u["user_id"].startswith("MANUAL_")]
+        real_users = [
+            u for u in users if not u["user_id"].startswith("MANUAL_")]
         all_targets = real_users if real_users else users
         if all_targets:
             for u in all_targets:
-                db.update_iux_id(u["user_id"], new_id, platform=u.get("platform", "line"))
-            platforms = ", ".join(u.get("platform", "line") for u in all_targets)
+                db.update_iux_id(u["user_id"], new_id,
+                                 platform=u.get("platform", "line"))
+            platforms = ", ".join(u.get("platform", "line")
+                                  for u in all_targets)
             reply(reply_token,
                   f"✅ อัปเดต IUX ID เรียบร้อย ({len(all_targets)} record)\n"
                   f"เก่า: {old_id}\nใหม่: {new_id}\nPlatform: {platforms}")
@@ -662,7 +684,8 @@ def _handle_admin(text: str, reply_token: str) -> None:
     elif cmd == "/reset" and arg:
         user = db.get_user_by_iux_id(arg)
         if user:
-            db.reset_user(user["user_id"], platform=user.get("platform", "line"))
+            db.reset_user(user["user_id"],
+                          platform=user.get("platform", "line"))
             reply(reply_token, f"🔄 Reset user IUX ID: {arg} แล้ว")
         else:
             reply(reply_token, f"❌ ไม่พบ IUX ID: {arg}")
@@ -718,7 +741,8 @@ def _handle_admin(text: str, reply_token: str) -> None:
                      f"✅ เช็ค email เสร็จแล้ว\n\n"
                      f"User ใหม่ที่ verify แล้ว:\n{lines}")
             else:
-                push(ADMIN_LINE_USER_ID, "✅ เช็ค email เสร็จแล้ว\nไม่พบ user ใหม่ที่รอ verify")
+                push(ADMIN_LINE_USER_ID,
+                     "✅ เช็ค email เสร็จแล้ว\nไม่พบ user ใหม่ที่รอ verify")
         except Exception as e:
             push(ADMIN_LINE_USER_ID, f"❌ Auto-verify ล้มเหลว: {e}")
 
