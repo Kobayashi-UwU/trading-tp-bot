@@ -120,8 +120,12 @@ def handle_fb_message(psid: str, text: str, db, configuration=None) -> None:
     text = text.strip()
     user = db.get_user(psid, platform=PLATFORM)
 
-    # Admin check — route before normal flow
-    if user and user.get("user_role") == "admin":
+    # Admin check — PSID matches env var OR user_role == "admin" in DB
+    admin_psid = os.environ.get("ADMIN_FB_PSID", "")
+    is_admin = (admin_psid and psid == admin_psid) or (
+        user and user.get("user_role") == "admin"
+    )
+    if is_admin:
         _handle_fb_admin(psid, text, db, configuration)
         return
 
