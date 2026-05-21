@@ -268,7 +268,7 @@ def privacy_policy():
 
 @app.route("/setup/facebook", methods=["GET"])
 def setup_facebook():
-    """Check Facebook page connection and webhook subscription status."""
+    """Check Facebook page connection and webhook subscription status"""
     token = os.environ.get("FB_PAGE_ACCESS_TOKEN", "")
     app_id = os.environ.get("FB_APP_ID", "")
     if not token:
