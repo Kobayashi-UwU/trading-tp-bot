@@ -474,7 +474,6 @@ def _handle_done(user: dict, reply_token: str) -> None:
             db.upsert_user(user["user_id"], pending_notified=True)
         return
     if status == "verified":
-        reply(reply_token, "📊 พิมพ์ /signal เพื่อดู signal ทองคำประจำวันได้เลยครับ (วันละ 1 ครั้ง)")
         return
     elif status == "rejected":
         db.upsert_user(

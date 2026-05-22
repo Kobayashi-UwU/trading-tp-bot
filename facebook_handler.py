@@ -261,8 +261,6 @@ def _handle_done(psid: str, db, user: dict) -> None:
         if not user.get("notification_token"):
             db.upsert_user(psid, platform=PLATFORM,
                            notification_token="ENGAGED")
-        fb_send(
-            psid, "📊 พิมพ์ /signal เพื่อดู signal ทองคำประจำวันได้เลยครับ (วันละ 1 ครั้ง)")
         return
 
     if status == "rejected":
