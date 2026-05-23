@@ -25,7 +25,17 @@ _VERIFY_MESSAGE = (
     "กลุ่มไลน์: https://line.me/ti/g2/2qPd6fIG5bY4P04_uKo_0sLKLDvqqTsAILh5Qg"
     "?utm_source=invitation&utm_medium=link_copy&utm_campaign=default\n\n"
     "📊 วิธีดู Daily Signal:\n"
-    "พิมพ์ /signal ในแชทนี้เพื่อดู signal ทองคำประจำวัน (วันละ 1 ครั้ง)\n\n"
+    "พิมพ์ /signal [asset] เพื่อขอ signal (วันละ 1 ครั้ง)\n"
+    "ไม่ระบุ asset → ได้ XAUUSD (ทองคำ) โดยอัตโนมัติ\n\n"
+    "ตัวอย่าง:\n"
+    "• /signal          → XAUUSD (ทองคำ)\n"
+    "• /signal BTCUSD   → Bitcoin\n"
+    "• /signal EURUSD   → EUR/USD\n\n"
+    "Asset ที่รองรับ:\n"
+    "🏅 XAUUSD  🛢 USOIL\n"
+    "💱 EURUSD  USDJPY  GBPUSD  AUDUSD  USDCAD  USDCHF  NZDUSD\n"
+    "   GBPJPY  EURJPY  EURAUD  EURGBP  AUDJPY\n"
+    "₿  BTCUSD  ETHUSD  ADAUSD  SOLUSD\n\n"
     "Strategy / Pine Script\n"
     "https://github.com/Kobayashi-UwU/trading_tp/tree/main/strategy\n\n"
     "Prompt\n"
@@ -162,8 +172,13 @@ def handle_fb_message(psid: str, text: str, db, configuration=None) -> None:
                         psid, fetched_name)
 
     state = user.get("state", "waiting_iux")
-    if text.lower() == "/signal" and user.get("status") == "verified":
-        _handle_fb_user_signal(psid, user, db)
+    if text.strip().split() and text.strip().split()[0].lower() == "/signal" and user.get("status") == "verified":
+        from signal_gen import parse_signal_asset
+        symbol, err = parse_signal_asset(text)
+        if err:
+            fb_send(psid, err)
+        else:
+            _handle_fb_user_signal(psid, user, db, symbol)
         return
 
     if state == "waiting_iux":
@@ -179,7 +194,10 @@ def handle_fb_optin(psid: str, token: str, db) -> None:
     db.upsert_user(psid, platform=PLATFORM, notification_token=token)
     logger.info(f"FB Recurring Notifications opt-in stored for {psid}")
     fb_send(
-        psid, "✅ ขอบคุณครับ! พิมพ์ /signal เพื่อดู signal ทองคำประจำวันได้เลยครับ (วันละ 1 ครั้ง) 📊")
+        psid,
+        "✅ ขอบคุณครับ! พิมพ์ /signal [asset] เพื่อขอ signal (วันละ 1 ครั้ง) 📊\n"
+        "เช่น /signal หรือ /signal BTCUSD หรือ /signal EURUSD"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -283,12 +301,12 @@ def _handle_done(psid: str, db, user: dict) -> None:
 
 _BUSY_MSG = (
     "⏳ ขณะนี้มีผู้ใช้งานระบบ AI จำนวนมาก\n"
-    "กรุณาลองพิมพ์ /signal ใหม่อีกครั้งในอีก 1-2 นาทีครับ 🙏"
+    "กรุณาลองพิมพ์ /signal [asset] ใหม่อีกครั้งในอีก 1-2 นาทีครับ 🙏"
 )
 
 
-def _handle_fb_user_signal(psid: str, user: dict, db) -> None:
-    """Handle /signal command for a verified Facebook user — one request per day."""
+def _handle_fb_user_signal(psid: str, user: dict, db, symbol: str = "XAUUSD") -> None:
+    """Handle /signal [ASSET] command for a verified Facebook user — one request per day."""
     import pytz
     from datetime import datetime
     tz = pytz.timezone("Asia/Bangkok")
@@ -298,11 +316,12 @@ def _handle_fb_user_signal(psid: str, user: dict, db) -> None:
         fb_send(psid, "⚠️ คุณขอดู signal แล้ววันนี้ครับ\nกลับมาใหม่พรุ่งนี้ได้เลย 📅")
         return
 
-    from signal_gen import generate_gold_analysis
+    from signal_gen import generate_analysis
     try:
-        signal = generate_gold_analysis()
+        signal = generate_analysis(symbol)
     except Exception as e:
-        logger.error("Signal generation failed for %s: %s", psid, e)
+        logger.error("Signal generation failed for %s (%s): %s",
+                     psid, symbol, e)
         fb_send(psid, _BUSY_MSG)
         return
 
@@ -310,7 +329,8 @@ def _handle_fb_user_signal(psid: str, user: dict, db) -> None:
     # A valid signal always contains entry/TP/SL numbers; anything shorter
     # than 200 chars is considered incomplete — do not consume the daily quota.
     if len(signal) < 200:
-        logger.warning("Signal too short for %s (%d chars) — not counting as used", psid, len(signal))
+        logger.warning(
+            "Signal too short for %s (%d chars) — not counting as used", psid, len(signal))
         fb_send(psid, _BUSY_MSG)
         return
 
@@ -484,20 +504,30 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
         broadcast_signal(configuration, db)
 
     elif cmd == "/dailycheck":
-        send("⏳ กำลังวิเคราะห์ทองคำ รอแป๊บนึงครับ...")
-        from signal_gen import generate_gold_analysis
+        from signal_gen import generate_analysis, ASSETS
+        asset = arg.upper() if arg else "XAUUSD"
+        if asset not in ASSETS:
+            send(
+                f"❌ ไม่รู้จัก asset '{arg}'\nAsset ที่รองรับ: {', '.join(sorted(ASSETS.keys()))}")
+            return
+        send(f"⏳ กำลังวิเคราะห์ {asset} รอแป๊บนึงครับ...")
         try:
-            analysis = generate_gold_analysis()
+            analysis = generate_analysis(asset)
             fb_send(psid, analysis)
         except Exception as e:
             logger.error("Admin dailycheck failed psid=%s: %s", psid, e)
-            send(f"❌ วิเคราะห์ทองไม่สำเร็จ: {e}")
+            send(f"❌ วิเคราะห์ {asset} ไม่สำเร็จ: {e}")
 
     elif cmd == "/signal":
-        send("⏳ กำลังวิเคราะห์ทองคำ รอแป๊บนึงครับ...")
-        from signal_gen import generate_gold_analysis
+        from signal_gen import generate_analysis, ASSETS
+        asset = arg.upper() if arg else "XAUUSD"
+        if asset not in ASSETS:
+            send(
+                f"❌ ไม่รู้จัก asset '{arg}'\nAsset ที่รองรับ: {', '.join(sorted(ASSETS.keys()))}")
+            return
+        send(f"⏳ กำลังวิเคราะห์ {asset} รอแป๊บนึงครับ...")
         try:
-            signal = generate_gold_analysis()
+            signal = generate_analysis(asset)
             fb_send(psid, signal)
         except Exception as e:
             logger.error("Admin signal failed psid=%s: %s", psid, e)
@@ -514,11 +544,13 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
             "/info [ID]            — ดูข้อมูล user\n"
             "/findname [ชื่อ]       — ค้นหา user จากชื่อ\n"
             "/list                 — ดู users ทั้งหมด\n"
-            "/signal              — generate signal (admin: ดูทันที / user: ดูได้วันละ 1 ครั้ง)\n"
-            "/dailycheck          — วิเคราะห์ทองคำทันที\n"
-            "/broadcast           — broadcast ไปหา verified users\n"
-            "/autoverifynow       — เช็ค email IUX และ verify ทันที\n"
-            "/help                — แสดง commands"
+            "/signal [asset]       — generate signal (default: XAUUSD)\n"
+            "/dailycheck [asset]   — วิเคราะห์ asset ทันที (default: XAUUSD)\n"
+            "/broadcast            — broadcast XAUUSD ไปหา verified users\n"
+            "/autoverifynow        — เช็ค email IUX และ verify ทันที\n"
+            "/help                 — แสดง commands\n\n"
+            "Asset: XAUUSD USOIL EURUSD USDJPY GBPUSD AUDUSD USDCAD USDCHF NZDUSD "
+            "GBPJPY EURJPY EURAUD EURGBP AUDJPY BTCUSD ETHUSD ADAUSD SOLUSD"
         )
 
     else:

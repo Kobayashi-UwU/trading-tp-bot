@@ -379,8 +379,13 @@ def handle_message(event):
         reply(reply_token, "กรุณาส่ง IUX User ID ของคุณเพื่อรับสิทธิ์ Daily Signal / Code / Prompt ครับ")
         return
 
-    if text.lower() == "/signal" and user.get("status") == "verified":
-        _handle_user_signal(user, reply_token)
+    if text.strip().split() and text.strip().split()[0].lower() == "/signal" and user.get("status") == "verified":
+        from signal_gen import parse_signal_asset
+        symbol, err = parse_signal_asset(text)
+        if err:
+            reply(reply_token, err)
+        else:
+            _handle_user_signal(user, reply_token, symbol)
         return
 
     state = user.get("state", "waiting_iux")
@@ -494,12 +499,12 @@ def _handle_done(user: dict, reply_token: str) -> None:
 
 _BUSY_MSG = (
     "⏳ ขณะนี้มีผู้ใช้งานระบบ AI จำนวนมาก\n"
-    "กรุณาลองพิมพ์ /signal ใหม่อีกครั้งในอีก 1-2 นาทีครับ 🙏"
+    "กรุณาลองพิมพ์ /signal [asset] ใหม่อีกครั้งในอีก 1-2 นาทีครับ 🙏"
 )
 
 
-def _handle_user_signal(user: dict, reply_token: str) -> None:
-    """Handle /signal command for a verified LINE user — one request per day."""
+def _handle_user_signal(user: dict, reply_token: str, symbol: str = "XAUUSD") -> None:
+    """Handle /signal [ASSET] command for a verified LINE user — one request per day."""
     import pytz
     from datetime import datetime
     tz = pytz.timezone("Asia/Bangkok")
@@ -509,11 +514,12 @@ def _handle_user_signal(user: dict, reply_token: str) -> None:
         reply(reply_token, "⚠️ คุณขอดู signal แล้ววันนี้ครับ\nกลับมาใหม่พรุ่งนี้ได้เลย 📅")
         return
 
-    from signal_gen import generate_gold_analysis
+    from signal_gen import generate_analysis
     try:
-        signal = generate_gold_analysis()
+        signal = generate_analysis(symbol)
     except Exception as e:
-        logger.error("Signal generation failed for %s: %s", user["user_id"], e)
+        logger.error("Signal generation failed for %s (%s): %s",
+                     user["user_id"], symbol, e)
         reply(reply_token, _BUSY_MSG)
         return
 
@@ -536,7 +542,17 @@ _VERIFY_MSG = (
     "กลุ่มไลน์: https://line.me/ti/g2/2qPd6fIG5bY4P04_uKo_0sLKLDvqqTsAILh5Qg"
     "?utm_source=invitation&utm_medium=link_copy&utm_campaign=default\n\n"
     "📊 วิธีดู Daily Signal:\n"
-    "พิมพ์ /signal ในแชทนี้เพื่อดู signal ทองคำประจำวัน (วันละ 1 ครั้ง)\n\n"
+    "พิมพ์ /signal [asset] เพื่อขอ signal (วันละ 1 ครั้ง)\n"
+    "ไม่ระบุ asset → ได้ XAUUSD (ทองคำ) โดยอัตโนมัติ\n\n"
+    "ตัวอย่าง:\n"
+    "• /signal          → XAUUSD (ทองคำ)\n"
+    "• /signal BTCUSD   → Bitcoin\n"
+    "• /signal EURUSD   → EUR/USD\n\n"
+    "Asset ที่รองรับ:\n"
+    "🏅 XAUUSD  🛢 USOIL\n"
+    "💱 EURUSD  USDJPY  GBPUSD  AUDUSD  USDCAD  USDCHF  NZDUSD\n"
+    "   GBPJPY  EURJPY  EURAUD  EURGBP  AUDJPY\n"
+    "₿  BTCUSD  ETHUSD  ADAUSD  SOLUSD\n\n"
     "Strategy / Pine Script\n"
     "https://github.com/Kobayashi-UwU/trading_tp/tree/main/strategy\n\n"
     "Prompt\n"
@@ -565,7 +581,8 @@ def _handle_admin(text: str, reply_token: str) -> None:
             reply(reply_token,
                   f"✅ ลงทะเบียนตัวเองเรียบร้อยแล้วครับ\n"
                   f"IUX ID: {iux_id}\n"
-                  f"พิมพ์ /signal เพื่อดู signal ทองคำประจำวันได้เลยครับ 📊")
+                  f"พิมพ์ /signal [asset] เพื่อขอ signal ได้เลยครับ 📊\n"
+                  f"เช่น /signal หรือ /signal BTCUSD หรือ /signal EURUSD")
         except Exception as e:
             reply(reply_token, f"❌ Error: {str(e)}")
 
@@ -708,23 +725,33 @@ def _handle_admin(text: str, reply_token: str) -> None:
         )
 
     elif cmd == "/signal":
-        reply(reply_token, "⏳ กำลังวิเคราะห์ทองคำ รอแป๊บนึงครับ...")
-        from signal_gen import generate_gold_analysis
+        from signal_gen import generate_analysis, ASSETS
+        asset = arg.upper() if arg else "XAUUSD"
+        if asset not in ASSETS:
+            reply(
+                reply_token, f"❌ ไม่รู้จัก asset '{arg}'\nAsset ที่รองรับ: {', '.join(sorted(ASSETS.keys()))}")
+            return
+        reply(reply_token, f"⏳ กำลังวิเคราะห์ {asset} รอแป๊บนึงครับ...")
         try:
-            signal = generate_gold_analysis()
+            signal = generate_analysis(asset)
             push(ADMIN_LINE_USER_ID, signal)
         except Exception as e:
             logger.error("Admin signal failed: %s", e)
             push(ADMIN_LINE_USER_ID, f"❌ Generate signal ล้มเหลว: {e}")
 
     elif cmd == "/dailycheck":
-        reply(reply_token, "⏳ กำลังวิเคราะห์ทองคำ รอแป๊บนึงครับ...")
-        from signal_gen import generate_gold_analysis
+        from signal_gen import generate_analysis, ASSETS
+        asset = arg.upper() if arg else "XAUUSD"
+        if asset not in ASSETS:
+            reply(
+                reply_token, f"❌ ไม่รู้จัก asset '{arg}'\nAsset ที่รองรับ: {', '.join(sorted(ASSETS.keys()))}")
+            return
+        reply(reply_token, f"⏳ กำลังวิเคราะห์ {asset} รอแป๊บนึงครับ...")
         try:
-            analysis = generate_gold_analysis()
+            analysis = generate_analysis(asset)
             push(ADMIN_LINE_USER_ID, analysis)
         except Exception as e:
-            push(ADMIN_LINE_USER_ID, f"❌ วิเคราะห์ทองไม่สำเร็จ: {e}")
+            push(ADMIN_LINE_USER_ID, f"❌ วิเคราะห์ {asset} ไม่สำเร็จ: {e}")
 
     elif cmd == "/autoverifynow":
         reply(reply_token, "⏳ กำลังเช็ค email จาก IUX ทันที...")
@@ -763,11 +790,13 @@ def _handle_admin(text: str, reply_token: str) -> None:
             "/info [ID]            — ดูข้อมูล user\n"
             "/findname [ชื่อ]       — ค้นหา user จากชื่อ\n"
             "/list                 — ดู users ทั้งหมด\n"
-            "/signal              — generate signal (admin: ดูทันที / user: ดูได้วันละ 1 ครั้ง)\n"
-            "/dailycheck          — วิเคราะห์ทองคำทันที\n"
-            "/broadcast           — broadcast ไปหา verified users\n"
-            "/autoverifynow       — เช็ค email IUX และ verify ทันที\n"
-            "/help                — แสดง commands",
+            "/signal [asset]       — generate signal (default: XAUUSD)\n"
+            "/dailycheck [asset]   — วิเคราะห์ asset ทันที (default: XAUUSD)\n"
+            "/broadcast            — broadcast XAUUSD ไปหา verified users\n"
+            "/autoverifynow        — เช็ค email IUX และ verify ทันที\n"
+            "/help                 — แสดง commands\n\n"
+            "Asset: XAUUSD USOIL EURUSD USDJPY GBPUSD AUDUSD USDCAD USDCHF NZDUSD "
+            "GBPJPY EURJPY EURAUD EURGBP AUDJPY BTCUSD ETHUSD ADAUSD SOLUSD",
         )
 
     else:
