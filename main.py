@@ -504,14 +504,16 @@ _BUSY_MSG = (
 
 
 def _handle_user_signal(user: dict, reply_token: str, symbol: str = "XAUUSD") -> None:
-    """Handle /signal [ASSET] command for a verified LINE user — one request per day."""
+    """Handle /signal [ASSET] command for a verified LINE user — limited requests per day."""
     import pytz
     from datetime import datetime
+    from signal_gen import DAILY_SIGNAL_LIMIT
     tz = pytz.timezone("Asia/Bangkok")
     today = datetime.now(tz).strftime("%Y-%m-%d")
 
-    if user.get("last_signal_date") == today:
-        reply(reply_token, "⚠️ คุณขอดู signal แล้ววันนี้ครับ\nกลับมาใหม่พรุ่งนี้ได้เลย 📅")
+    used_today = (user.get("signal_count") or 0) if user.get("last_signal_date") == today else 0
+    if used_today >= DAILY_SIGNAL_LIMIT:
+        reply(reply_token, f"⚠️ วันนี้คุณขอ signal ครบ {DAILY_SIGNAL_LIMIT} ครั้งแล้วครับ\nกลับมาใหม่พรุ่งนี้ได้เลย 📅")
         return
 
     from signal_gen import generate_analysis
@@ -529,7 +531,8 @@ def _handle_user_signal(user: dict, reply_token: str, symbol: str = "XAUUSD") ->
         reply(reply_token, _BUSY_MSG)
         return
 
-    db.upsert_user(user["user_id"], platform="line", last_signal_date=today)
+    db.upsert_user(user["user_id"], platform="line",
+                   last_signal_date=today, signal_count=used_today + 1)
     reply(reply_token, signal)
 
 
@@ -542,7 +545,7 @@ _VERIFY_MSG = (
     "กลุ่มไลน์: https://line.me/ti/g2/2qPd6fIG5bY4P04_uKo_0sLKLDvqqTsAILh5Qg"
     "?utm_source=invitation&utm_medium=link_copy&utm_campaign=default\n\n"
     "📊 วิธีดู Daily Signal:\n"
-    "พิมพ์ /signal [asset] เพื่อขอ signal (วันละ 1 ครั้ง)\n"
+    "พิมพ์ /signal [asset] เพื่อขอ signal (วันละ 3 ครั้ง)\n"
     "ไม่ระบุ asset → ได้ XAUUSD (ทองคำ) โดยอัตโนมัติ\n\n"
     "ตัวอย่าง:\n"
     "• /signal          → XAUUSD (ทองคำ)\n"

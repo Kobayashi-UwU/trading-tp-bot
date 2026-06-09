@@ -25,7 +25,7 @@ _VERIFY_MESSAGE = (
     "กลุ่มไลน์: https://line.me/ti/g2/2qPd6fIG5bY4P04_uKo_0sLKLDvqqTsAILh5Qg"
     "?utm_source=invitation&utm_medium=link_copy&utm_campaign=default\n\n"
     "📊 วิธีดู Daily Signal:\n"
-    "พิมพ์ /signal [asset] เพื่อขอ signal (วันละ 1 ครั้ง)\n"
+    "พิมพ์ /signal [asset] เพื่อขอ signal (วันละ 3 ครั้ง)\n"
     "ไม่ระบุ asset → ได้ XAUUSD (ทองคำ) โดยอัตโนมัติ\n\n"
     "ตัวอย่าง:\n"
     "• /signal          → XAUUSD (ทองคำ)\n"
@@ -195,7 +195,7 @@ def handle_fb_optin(psid: str, token: str, db) -> None:
     logger.info(f"FB Recurring Notifications opt-in stored for {psid}")
     fb_send(
         psid,
-        "✅ ขอบคุณครับ! พิมพ์ /signal [asset] เพื่อขอ signal (วันละ 1 ครั้ง) 📊\n"
+        "✅ ขอบคุณครับ! พิมพ์ /signal [asset] เพื่อขอ signal (วันละ 3 ครั้ง) 📊\n"
         "เช่น /signal หรือ /signal BTCUSD หรือ /signal EURUSD"
     )
 
@@ -306,14 +306,16 @@ _BUSY_MSG = (
 
 
 def _handle_fb_user_signal(psid: str, user: dict, db, symbol: str = "XAUUSD") -> None:
-    """Handle /signal [ASSET] command for a verified Facebook user — one request per day."""
+    """Handle /signal [ASSET] command for a verified Facebook user — limited requests per day."""
     import pytz
     from datetime import datetime
+    from signal_gen import DAILY_SIGNAL_LIMIT
     tz = pytz.timezone("Asia/Bangkok")
     today = datetime.now(tz).strftime("%Y-%m-%d")
 
-    if user.get("last_signal_date") == today:
-        fb_send(psid, "⚠️ คุณขอดู signal แล้ววันนี้ครับ\nกลับมาใหม่พรุ่งนี้ได้เลย 📅")
+    used_today = (user.get("signal_count") or 0) if user.get("last_signal_date") == today else 0
+    if used_today >= DAILY_SIGNAL_LIMIT:
+        fb_send(psid, f"⚠️ วันนี้คุณขอ signal ครบ {DAILY_SIGNAL_LIMIT} ครั้งแล้วครับ\nกลับมาใหม่พรุ่งนี้ได้เลย 📅")
         return
 
     from signal_gen import generate_analysis
@@ -334,8 +336,12 @@ def _handle_fb_user_signal(psid: str, user: dict, db, symbol: str = "XAUUSD") ->
         fb_send(psid, _BUSY_MSG)
         return
 
-    db.upsert_user(psid, platform=PLATFORM, last_signal_date=today)
+    db.upsert_user(psid, platform=PLATFORM,
+                   last_signal_date=today, signal_count=used_today + 1)
     fb_send(psid, signal)
+    remaining = DAILY_SIGNAL_LIMIT - (used_today + 1)
+    if remaining > 0:
+        fb_send(psid, f"📊 วันนี้ขอ signal ได้อีก {remaining} ครั้งครับ")
 
 
 # ---------------------------------------------------------------------------

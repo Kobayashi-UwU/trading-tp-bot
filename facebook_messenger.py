@@ -45,7 +45,7 @@ def fb_send_recurring_opt_in(psid: str) -> None:
     """
     fb_send(
         psid,
-        "📬 พิมพ์ /signal เพื่อดู signal ทองคำประจำวันได้เลยครับ (วันละ 1 ครั้ง) 📊",
+        "📬 พิมพ์ /signal เพื่อดู signal ทองคำประจำวันได้เลยครับ (วันละ 3 ครั้ง) 📊",
     )
 
 

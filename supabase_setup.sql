@@ -17,6 +17,10 @@ CREATE TABLE IF NOT EXISTS users (
     -- Facebook Recurring Notifications token (FB only)
     created_at          TIMESTAMPTZ DEFAULT NOW(),
     verified_at         TIMESTAMPTZ,
+    last_signal_date    TEXT,
+    -- วันที่ขอ /signal ครั้งล่าสุด (รูปแบบ YYYY-MM-DD ตามเวลาไทย)
+    signal_count        INTEGER     DEFAULT 0,
+    -- จำนวนครั้งที่ขอ /signal ในวันของ last_signal_date (รีเซ็ตเมื่อข้ามวัน)
     PRIMARY KEY (platform, user_id)
 );
 
@@ -53,6 +57,11 @@ ALTER TABLE users ADD PRIMARY KEY (platform, user_id);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE;
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS user_role TEXT DEFAULT NULL;
+
+-- 5. โควต้า /signal ต่อวัน (วันละ 3 ครั้ง) — เพิ่มตัวนับ signal_count
+--    last_signal_date มีอยู่แล้วในระบบเดิม; เพิ่มเฉพาะ signal_count
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_signal_date TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS signal_count     INTEGER DEFAULT 0;
 
 -- ═══════════════════════════════════════════════════════════════
 -- RLS HARDENING — รันหลังเปลี่ยน SUPABASE_KEY ใน Railway เป็น

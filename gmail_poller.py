@@ -23,7 +23,7 @@ _VERIFY_MSG = (
     "กลุ่มไลน์: https://line.me/ti/g2/2qPd6fIG5bY4P04_uKo_0sLKLDvqqTsAILh5Qg"
     "?utm_source=invitation&utm_medium=link_copy&utm_campaign=default\n\n"
     "📊 วิธีดู Daily Signal:\n"
-    "พิมพ์ /signal ในแชทบอทเพื่อดู signal ทองคำประจำวัน (วันละ 1 ครั้ง)\n\n"
+    "พิมพ์ /signal ในแชทบอทเพื่อดู signal ทองคำประจำวัน (วันละ 3 ครั้ง)\n\n"
     "Strategy / Pine Script\n"
     "https://github.com/Kobayashi-UwU/trading_tp/tree/main/strategy\n\n"
     "Prompt\n"

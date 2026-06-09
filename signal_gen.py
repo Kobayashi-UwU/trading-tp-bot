@@ -35,9 +35,12 @@ ASSETS: dict[str, dict] = {
     "AUDJPY": {"ticker": "AUDJPY=X", "name": "Australian Dollar vs Japanese Yen","emoji": "💱", "type": "forex_cross","decimals": 3},
 }
 
+# จำนวนครั้งที่ user ขอ /signal ได้ต่อวัน (รีเซ็ตทุกวันตามเวลาไทย)
+DAILY_SIGNAL_LIMIT = 3
+
 SIGNAL_HELP = (
     "📊 วิธีดู Daily Signal:\n"
-    "พิมพ์ /signal [asset] เพื่อขอ signal (วันละ 1 ครั้ง)\n"
+    "พิมพ์ /signal [asset] เพื่อขอ signal (วันละ 3 ครั้ง)\n"
     "ไม่ระบุ asset → ได้ XAUUSD (ทองคำ) โดยอัตโนมัติ\n\n"
     "ตัวอย่าง:\n"
     "• /signal          → XAUUSD (ทองคำ)\n"
