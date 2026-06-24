@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 _IMAP_HOST = "imap.gmail.com"
 _IMAP_PORT = 993
-_IUX_SENDER = "noreply@iux.com"
+_IUX_SENDER = "noreply@exness.com"
 
 _VERIFY_MSG = (
     "🎉 ยืนยันเรียบร้อยแล้วครับ!\n\n"
@@ -120,7 +120,7 @@ def _poll_iux_emails(configuration, db, unseen_only: bool) -> list[dict]:
         if not email_ids:
             return []
 
-        logger.info(f"Found {len(email_ids)} IUX email(s) (unseen_only={unseen_only})")
+        logger.info(f"Found {len(email_ids)} Exness email(s) (unseen_only={unseen_only})")
 
         for eid in email_ids:
             try:
@@ -131,17 +131,17 @@ def _poll_iux_emails(configuration, db, unseen_only: bool) -> list[dict]:
                 iux_id = _extract_iux_id(body)
 
                 if not iux_id:
-                    logger.warning(f"No IUX User ID found in email {eid}")
+                    logger.warning(f"No Exness UID found in email {eid}")
                     if unseen_only:
                         mail.store(eid, "+FLAGS", "\\Seen")
                     continue
 
-                logger.info(f"IUX email — User ID: {iux_id}")
+                logger.info(f"Exness email — User ID: {iux_id}")
                 users = db.get_all_users_by_iux_id(iux_id)
                 pending = [u for u in users if u.get("status") == "pending"]
 
                 if not pending:
-                    logger.info(f"IUX ID {iux_id} not found as pending — skipping")
+                    logger.info(f"Exness UID {iux_id} not found as pending — skipping")
                     # Do NOT mark as Seen — user may register later and we need to re-process
                     continue
 
@@ -166,7 +166,7 @@ def _poll_iux_emails(configuration, db, unseen_only: bool) -> list[dict]:
                 # Mark as Seen only after successfully verifying at least one user
                 if unseen_only:
                     mail.store(eid, "+FLAGS", "\\Seen")
-                logger.info(f"Auto-verified IUX ID: {iux_id} for {len(pending)} user(s)")
+                logger.info(f"Auto-verified Exness UID: {iux_id} for {len(pending)} user(s)")
 
             except Exception as e:
                 logger.error(f"Error processing email {eid}: {e}")
@@ -181,10 +181,10 @@ def _poll_iux_emails(configuration, db, unseen_only: bool) -> list[dict]:
 
 
 def poll_new_iux_emails(configuration, db) -> list[dict]:
-    """Scheduled job: check only UNSEEN emails, mark as read after processing."""
+    """Scheduled job: check only UNSEEN emails from Exness, mark as read after processing."""
     return _poll_iux_emails(configuration, db, unseen_only=True)
 
 
 def poll_all_iux_emails(configuration, db) -> list[dict]:
-    """Manual trigger (/autoverifynow): scan ALL emails from IUX regardless of read status."""
+    """Manual trigger (/autoverifynow): scan ALL emails from Exness regardless of read status."""
     return _poll_iux_emails(configuration, db, unseen_only=False)

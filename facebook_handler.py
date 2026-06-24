@@ -150,14 +150,14 @@ def handle_fb_message(psid: str, text: str, db, configuration=None) -> None:
             psid,
             "สวัสดีครับ! ยินดีต้อนรับสู่ TradingTP 🎉\n\n"
             "เพื่อรับ Daily Signal ฟรี / Prompt หรือ โค้ดต่างๆ "
-            "กรุณาส่ง IUX User ID ของคุณมาได้เลยครับ\n\n"
-            "💡 IUX User ID คือตัวเลข 5, 6 หรือ 8 หลักที่แสดงอยู่ในหน้า Profile ของ IUX ครับ\n\n"
-            "หรือหากยังไม่มีบัญชี IUX สามารถสมัครฟรีได้ที่ "
-            "https://iux.com/en/register?code=IuyjFrlz เลยครับ\n\n"
-            "สำหรับคนที่มีบัญชี iux อยู่แล้ว ต้องโอนย้ายก่อนนะครับตามลิงค์นี้\n"
+            "กรุณาส่ง Exness UID ของคุณมาได้เลยครับ\n\n"
+            "💡 Exness UID คือตัวเลขที่แสดงอยู่ในหน้า Profile ของ Exness ครับ\n\n"
+            "หรือหากยังไม่มีบัญชี Exness สามารถสมัครฟรีได้ที่ "
+            "https://one.exnessonelink.com/a/lut0605b6n เลยครับ\n\n"
+            "สำหรับคนที่มีบัญชี Exness อยู่แล้ว ต้องโอนย้าย Partner ก่อนนะครับ\n"
             "👇👇👇\n"
-            "https://www.iux.com/en/dashboard/ib-transfers-request\n\n"
-            "Partner referral code: IuyjFrlz\n\n"
+            "ทัก Live Chat ในเว็บไซต์ Exness (exness.com) แล้วทำตามขั้นตอนที่เว็บไซต์ได้อธิบายไว้ครับ\n\n"
+            "Partner code: lut0605b6n\n\n"
             "หลังจากโอนย้ายเสร็จแล้วแจ้งผมได้เลยครับผม",
         )
         return
@@ -210,14 +210,14 @@ def _handle_waiting_iux(psid: str, text: str, db) -> None:
         db.upsert_user(psid, platform=PLATFORM,
                        pending_iux_id=iux_id, state="confirming")
         fb_send(
-            psid, f"IUX User ID: {iux_id} ใช่ไหมครับ? (พิมพ์ ใช่ หรือ ไม่)")
+            psid, f"Exness UID: {iux_id} ใช่ไหมครับ? (พิมพ์ ใช่ หรือ ไม่)")
 
 
 def _handle_confirming(psid: str, text: str, db, user: dict) -> None:
     if text.lower() in _YES_WORDS:
         pending = user.get("pending_iux_id")
 
-        # ถ้า IUX ID นี้ verified บน platform อื่นอยู่แล้ว → verify ทันทีไม่ต้องรอ email
+        # ถ้า Exness UID นี้ verified บน platform อื่นอยู่แล้ว → verify ทันทีไม่ต้องรอ email
         existing = db.get_all_users_by_iux_id(pending)
         already_verified = any(
             u.get("status") == "verified" and u.get("user_id") != psid
@@ -240,7 +240,7 @@ def _handle_confirming(psid: str, text: str, db, user: dict) -> None:
             )
             fb_send(
                 psid,
-                f"✅ บันทึก IUX ID: {pending} เรียบร้อยครับ\n\n"
+                f"✅ บันทึก Exness UID: {pending} เรียบร้อยครับ\n\n"
                 "⏳ รอ Admin ยืนยันสักครู่นะครับ 🙏",
             )
             display_name = user.get(
@@ -248,7 +248,7 @@ def _handle_confirming(psid: str, text: str, db, user: dict) -> None:
             _notify_all_admins(
                 f"🔔 มี User ใหม่รอยืนยัน! [Facebook]\n\n"
                 f"ชื่อ Facebook: {display_name}\n"
-                f"IUX User ID : {pending}\n\n"
+                f"Exness UID  : {pending}\n\n"
                 f"✅ ยืนยัน: /verify {pending}\n"
                 f"❌ ปฏิเสธ: /reject {pending}",
                 db=db,
@@ -257,7 +257,7 @@ def _handle_confirming(psid: str, text: str, db, user: dict) -> None:
     elif text.lower() in _NO_WORDS:
         db.upsert_user(psid, platform=PLATFORM,
                        pending_iux_id=None, state="waiting_iux")
-        fb_send(psid, "โอเคครับ กรุณาส่ง IUX User ID ใหม่ได้เลยครับ 😊")
+        fb_send(psid, "โอเคครับ กรุณาส่ง Exness UID ใหม่ได้เลยครับ 😊")
 
     else:
         fb_send(psid, "กรุณาตอบ 'ใช่' หรือ 'ไม่' ครับ")
@@ -269,7 +269,7 @@ def _handle_done(psid: str, db, user: dict) -> None:
         if not user.get("pending_notified"):
             fb_send(
                 psid,
-                "⏳ กำลังรอ Admin ยืนยัน IUX User ID ของคุณอยู่ครับ\n"
+                "⏳ กำลังรอ Admin ยืนยัน Exness UID ของคุณอยู่ครับ\n"
                 "จะแจ้งให้ทราบเมื่อผ่านแล้ว 🙏",
             )
             db.upsert_user(psid, platform=PLATFORM, pending_notified=True)
@@ -289,9 +289,9 @@ def _handle_done(psid: str, db, user: dict) -> None:
         )
         fb_send(
             psid,
-            "❌ IUX User ID ไม่ผ่านการยืนยันครับ\n\n"
-            "กรุณาส่ง IUX User ID ใหม่ได้เลยครับ\n"
-            "(ตรวจสอบว่าสมัคร IUX ผ่าน affiliate link ของ TradingTP แล้วนะครับ)",
+            "❌ Exness UID ไม่ผ่านการยืนยันครับ\n\n"
+            "กรุณาส่ง Exness UID ใหม่ได้เลยครับ\n"
+            "(ตรวจสอบว่าสมัคร Exness ผ่าน affiliate link ของ TradingTP แล้วนะครับ)",
         )
 
 
@@ -360,13 +360,13 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
         existing = db.get_user_by_iux_id(arg)
         if existing:
             send(
-                f"⚠️ IUX ID: {arg} มีในระบบแล้ว (status: {existing.get('status')})")
+                f"⚠️ Exness UID: {arg} มีในระบบแล้ว (status: {existing.get('status')})")
         else:
             fake_id = f"MANUAL_{arg}"
             db.upsert_user(fake_id, iux_user_id=arg, status="pending",
                            state="done", display_name=f"[Manual] {arg}")
             send(
-                f"✅ เพิ่ม IUX ID: {arg} เข้าระบบแล้ว\n\n"
+                f"✅ เพิ่ม Exness UID: {arg} เข้าระบบแล้ว\n\n"
                 f"⚠️ หมายเหตุ: user นี้เป็น placeholder ไม่มีบัญชี FB/LINE\n"
                 f"บอทจะ verify อัตโนมัติเมื่อเจอ email แต่จะ**ไม่ส่งข้อความ**แจ้ง user\n"
                 f"ต้องแจ้ง user เองด้วยตนเอง หรือรอให้ user เริ่มคุยกับบอทก่อน\n\n"
@@ -386,9 +386,9 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
                         logger.warning(
                             "Could not send recurring opt-in to %s: %s", u["user_id"], e)
             platforms = ", ".join(u["platform"] for u in users)
-            send(f"✅ Verified IUX ID: {arg} ({platforms})")
+            send(f"✅ Verified Exness UID: {arg} ({platforms})")
         else:
-            send(f"❌ ไม่พบ IUX ID: {arg} ในระบบ")
+            send(f"❌ ไม่พบ Exness UID: {arg} ในระบบ")
 
     elif cmd == "/reject" and arg:
         users = db.get_all_users_by_iux_id(arg)
@@ -398,19 +398,19 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
                     u["user_id"], platform=u["platform"], status="rejected")
                 _push_to_user(
                     u,
-                    "❌ IUX User ID ไม่ผ่านการยืนยันครับ\n\n"
-                    "กรุณาตรวจสอบว่าสมัคร IUX ผ่าน affiliate link ของ TradingTP\n"
-                    "แล้วส่ง ID มาใหม่ได้เลยครับ 🙏",
+                    "❌ Exness UID ไม่ผ่านการยืนยันครับ\n\n"
+                    "กรุณาตรวจสอบว่าสมัคร Exness ผ่าน affiliate link ของ TradingTP\n"
+                    "แล้วส่ง UID มาใหม่ได้เลยครับ 🙏",
                 )
-            send(f"❌ Rejected IUX ID: {arg}")
+            send(f"❌ Rejected Exness UID: {arg}")
         else:
-            send(f"❌ ไม่พบ IUX ID: {arg} ในระบบ")
+            send(f"❌ ไม่พบ Exness UID: {arg} ในระบบ")
 
     elif cmd == "/update" and arg:
         parts_arg = arg.split()
         if len(parts_arg) != 2:
             send(
-                "❌ รูปแบบไม่ถูกต้อง\nใช้: /update [iux_id_เก่า] [iux_id_ใหม่]")
+                "❌ รูปแบบไม่ถูกต้อง\nใช้: /update [exness_uid_เก่า] [exness_uid_ใหม่]")
             return
         old_id, new_id = parts_arg
         users = db.get_all_users_by_iux_id(old_id)
@@ -424,9 +424,9 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
             platforms = ", ".join(u.get("platform", "line")
                                   for u in all_targets)
             send(
-                f"✅ อัปเดต IUX ID เรียบร้อย ({len(all_targets)} record)\nเก่า: {old_id}\nใหม่: {new_id}\nPlatform: {platforms}")
+                f"✅ อัปเดต Exness UID เรียบร้อย ({len(all_targets)} record)\nเก่า: {old_id}\nใหม่: {new_id}\nPlatform: {platforms}")
         else:
-            send(f"❌ ไม่พบ IUX ID: {old_id} ในระบบ")
+            send(f"❌ ไม่พบ Exness UID: {old_id} ในระบบ")
 
     elif cmd == "/findname" and arg:
         users = db.search_by_name(arg)
@@ -435,7 +435,7 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
             for u in users:
                 lines.append(
                     f"👤 {u.get('display_name', '?')}\n"
-                    f"   IUX: {u.get('iux_user_id', '-')}\n"
+                    f"   Exness UID: {u.get('iux_user_id', '-')}\n"
                     f"   Platform: {u.get('platform', '-')}\n"
                     f"   Status: {u.get('status', '-')}"
                 )
@@ -452,23 +452,23 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
             send(
                 f"📋 ข้อมูล User\n\n"
                 f"ชื่อ         : {user.get('display_name', '-')}\n"
-                f"IUX User ID  : {user.get('iux_user_id', '-')}\n"
+                f"Exness UID   : {user.get('iux_user_id', '-')}\n"
                 f"Platform     : {user.get('platform', '-')}\n"
                 f"Status       : {user.get('status', '-')}\n"
                 f"สมัครวันที่  : {created_at[:10] if len(created_at) > 10 else created_at}\n"
                 f"Verify วันที่: {verified_at[:10] if len(verified_at) > 10 else verified_at}"
             )
         else:
-            send(f"❌ ไม่พบ IUX ID: {arg} ในระบบ")
+            send(f"❌ ไม่พบ Exness UID: {arg} ในระบบ")
 
     elif cmd == "/reset" and arg:
         user = db.get_user_by_iux_id(arg)
         if user:
             db.reset_user(user["user_id"],
                           platform=user.get("platform", "line"))
-            send(f"🔄 Reset user IUX ID: {arg} แล้ว")
+            send(f"🔄 Reset user Exness UID: {arg} แล้ว")
         else:
-            send(f"❌ ไม่พบ IUX ID: {arg}")
+            send(f"❌ ไม่พบ Exness UID: {arg}")
 
     elif cmd == "/list":
         users = db.get_all_users()
@@ -477,7 +477,7 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
         line_v = sum(1 for u in verified if u.get("platform") == "line")
         fb_v = sum(1 for u in verified if u.get("platform") == "facebook")
         pending_str = "\n".join(
-            f"  • {u['iux_user_id']} [{u.get('platform', 'line')}]" for u in pending
+            f"  • UID {u['iux_user_id']} [{u.get('platform', 'line')}]" for u in pending
         ) or "  (ไม่มี)"
         send(
             f"📊 สรุป Users ทั้งหมด\n\n"
@@ -488,13 +488,13 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
         )
 
     elif cmd == "/autoverifynow":
-        send("⏳ กำลังเช็ค email จาก IUX ทันที...")
+        send("⏳ กำลังเช็ค email จาก Exness ทันที...")
         from gmail_poller import poll_all_iux_emails
         try:
             verified = poll_all_iux_emails(configuration, db)
             if verified:
                 lines = "\n".join(
-                    f"{i+1}. IUX ID: {v['iux_id']}  ชื่อ {v['platform'].upper()}: {v['display_name']}"
+                    f"{i+1}. Exness UID: {v['iux_id']}  ชื่อ {v['platform'].upper()}: {v['display_name']}"
                     for i, v in enumerate(verified)
                 )
                 send(
@@ -508,6 +508,46 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
         send("⏳ กำลัง broadcast signal ไปหา verified users...")
         from scheduler import broadcast_signal
         broadcast_signal(configuration, db)
+
+    elif cmd == "/migrate":
+        import threading
+
+        _MIGRATE_MSG = (
+            "📢 ประกาศสำคัญจาก TradingTP!\n\n"
+            "ระบบ affiliate ของโบรกเกอร์เดิมได้ยกเลิกแล้วครับ\n"
+            "TradingTP ได้ย้ายมาใช้โบรกเกอร์ Exness แทนแล้ว\n\n"
+            "เพื่อยังคงรับ Daily Signal ต่อไป กรุณาดำเนินการดังนี้ครับ:\n\n"
+            "1️⃣ สมัครบัญชี Exness ใหม่ฟรีที่:\n"
+            "https://one.exnessonelink.com/a/lut0605b6n\n\n"
+            "หรือถ้ามีบัญชี Exness อยู่แล้ว ต้องโอนย้าย Partner ก่อนนะครับ\n"
+            "→ ทัก Live Chat ที่เว็บ Exness (exness.com)\n"
+            "→ Partner code: lut0605b6n\n\n"
+            "2️⃣ หลังสมัคร/โอนย้ายเสร็จแล้ว ส่ง Exness UID มาในแชทนี้ได้เลยครับ\n\n"
+            "ขอโทษในความไม่สะดวกนะครับ ขอบคุณที่ร่วมสนับสนุน TradingTP 🙏"
+        )
+
+        users = db.get_all_users()
+        targets = [u for u in users if u.get("status") != "blocked"]
+        send(f"⏳ กำลังส่งข้อความแจ้งย้ายโบรกเกอร์ไปหา {len(targets)} คน...")
+
+        def _do_fb_migrate():
+            ok, fail = 0, 0
+            for u in targets:
+                try:
+                    _push_to_user(u, _MIGRATE_MSG)
+                    ok += 1
+                except Exception as e:
+                    logger.warning("migrate push failed uid=%s: %s", u["user_id"], e)
+                    fail += 1
+            summary = (
+                f"📢 ส่งข้อความแจ้ง Migration เสร็จแล้ว!\n\n"
+                f"✅ สำเร็จ : {ok} คน\n"
+                f"❌ ล้มเหลว: {fail} คน\n\n"
+                f"ผู้ใช้จะต้องส่ง Exness UID ใหม่มาเพื่อยืนยันตัวตนอีกครั้งครับ"
+            )
+            _notify_all_admins(summary, db=db)
+
+        threading.Thread(target=_do_fb_migrate, daemon=True).start()
 
     elif cmd == "/dailycheck":
         from signal_gen import generate_analysis, ASSETS
@@ -542,19 +582,20 @@ def _handle_fb_admin(psid: str, text: str, db, configuration) -> None:
     elif cmd == "/help":
         send(
             "📋 Admin Commands:\n\n"
-            "/addpending [ID]      — เพิ่ม IUX ID เข้าระบบ (manual)\n"
-            "/verify [ID]          — ยืนยัน user (ทุก platform)\n"
-            "/reject [ID]          — ปฏิเสธ user (ทุก platform)\n"
-            "/update [เก่า] [ใหม่]  — แก้ IUX ID ของ user\n"
-            "/reset [ID]           — reset ให้ user ส่ง ID ใหม่\n"
-            "/info [ID]            — ดูข้อมูล user\n"
-            "/findname [ชื่อ]       — ค้นหา user จากชื่อ\n"
-            "/list                 — ดู users ทั้งหมด\n"
-            "/signal [asset]       — generate signal (default: XAUUSD)\n"
-            "/dailycheck [asset]   — วิเคราะห์ asset ทันที (default: XAUUSD)\n"
-            "/broadcast            — broadcast XAUUSD ไปหา verified users\n"
-            "/autoverifynow        — เช็ค email IUX และ verify ทันที\n"
-            "/help                 — แสดง commands\n\n"
+            "/addpending [UID]      — เพิ่ม Exness UID เข้าระบบ (manual)\n"
+            "/verify [UID]          — ยืนยัน user (ทุก platform)\n"
+            "/reject [UID]          — ปฏิเสธ user (ทุก platform)\n"
+            "/update [เก่า] [ใหม่]   — แก้ Exness UID ของ user\n"
+            "/reset [UID]           — reset ให้ user ส่ง UID ใหม่\n"
+            "/info [UID]            — ดูข้อมูล user\n"
+            "/findname [ชื่อ]        — ค้นหา user จากชื่อ\n"
+            "/list                  — ดู users ทั้งหมด\n"
+            "/signal [asset]        — generate signal (default: XAUUSD)\n"
+            "/dailycheck [asset]    — วิเคราะห์ asset ทันที (default: XAUUSD)\n"
+            "/broadcast             — broadcast XAUUSD ไปหา verified users\n"
+            "/autoverifynow         — เช็ค email Exness และ verify ทันที\n"
+            "/migrate               — แจ้งผู้ใช้ทุกคนให้ย้ายมาสมัคร Exness ใหม่\n"
+            "/help                  — แสดง commands\n\n"
             "Asset: XAUUSD USOIL EURUSD USDJPY GBPUSD AUDUSD USDCAD USDCHF NZDUSD "
             "GBPJPY EURJPY EURAUD EURGBP AUDJPY BTCUSD ETHUSD ADAUSD SOLUSD"
         )

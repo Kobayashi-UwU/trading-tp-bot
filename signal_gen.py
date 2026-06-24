@@ -374,7 +374,7 @@ def generate_analysis(symbol: str) -> str:
     cfg = ASSETS[symbol]
     asset_type = cfg["type"]
     d = cfg["decimals"]
-    affiliate_link = os.environ.get("IUX_AFFILIATE_LINK", "https://iux.com")
+    affiliate_link = os.environ.get("EXNESS_AFFILIATE_LINK", os.environ.get("IUX_AFFILIATE_LINK", "https://one.exnessonelink.com/a/lut0605b6n"))
 
     bangkok = pytz.timezone("Asia/Bangkok")
     now = datetime.now(bangkok)
@@ -497,7 +497,7 @@ EMA20 Daily : {data.get('ema20_1d', 0):.{d}f}
 [Session + สิ่งที่ต้องระวัง 1-2 บรรทัด]
 
 ───────────────
-เทรดผ่าน IUX รับ spread ต่ำสุด
+เทรดผ่าน Exness รับ spread ต่ำสุด
 👉 สมัครฟรี: {affiliate_link}
 
 ⚠️ เนื้อหานี้เป็นเพียงข้อมูลการวิเคราะห์จาก AI

@@ -199,7 +199,7 @@ def _show_help():
   {YELLOW}/quit{R}         — ออก
 
 {BOLD}วิธีทดสอบเบื้องต้น:{R}
-  1. พิมพ์ข้อความเหมือน user ปกติ เช่น ส่ง IUX User ID: {CYAN}123456{R}
+  1. พิมพ์ข้อความเหมือน user ปกติ เช่น ส่ง Exness UID: {CYAN}12345678{R}
   2. /admin แล้วพิมพ์ /verify 123456 เพื่อยืนยัน
   3. /user TEST_USER_001 เพื่อกลับไปเช็คว่า user ได้รับแจ้ง verified
 """)

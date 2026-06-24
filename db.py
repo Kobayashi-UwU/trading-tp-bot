@@ -29,7 +29,7 @@ class Database:
         return result.data[0] if result.data else None
 
     def get_user_by_iux_id(self, iux_user_id: str) -> dict | None:
-        """Return the first row matching the IUX ID (any platform)."""
+        """Return the first row matching the Exness UID (any platform)."""
         result = (
             self.client.table(self.table)
             .select("*")
@@ -39,7 +39,7 @@ class Database:
         return result.data[0] if result.data else None
 
     def get_all_users_by_iux_id(self, iux_user_id: str) -> list[dict]:
-        """Return every row matching the IUX ID across all platforms."""
+        """Return every row matching the Exness UID across all platforms."""
         result = (
             self.client.table(self.table)
             .select("*")

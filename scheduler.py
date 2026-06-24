@@ -61,11 +61,11 @@ def send_pending_reminders(configuration, db) -> None:
 
     logger.info(f"Sending pending reminders to {len(users)} user(s)")
     _REMINDER_MSG = (
-        "ชื่อยังไม่ขึ้นในระบบนะครับ แนะนำให้ลองทำการโอนย้ายก่อนตามลิงค์นี้\n"
+        "ชื่อยังไม่ขึ้นในระบบนะครับ แนะนำให้ลองโอนย้าย Partner ก่อนนะครับ\n"
         "👇👇👇\n"
-        "https://www.iux.com/en/dashboard/ib-transfers-request\n\n"
-        "Partner referral code:\n"
-        "IuyjFrlz\n\n"
+        "ทัก Live Chat ในเว็บไซต์ Exness (exness.com) แล้วทำตามขั้นตอนที่เว็บไซต์ได้อธิบายไว้ครับ\n\n"
+        "Partner code:\n"
+        "lut0605b6n\n\n"
         "หลังจากโอนย้ายเสร็จแล้วแจ้งผมได้เลยครับผม"
     )
 
@@ -119,7 +119,7 @@ def start_scheduler(configuration, db) -> BackgroundScheduler:
         minutes=60,
         args=[configuration, db],
         id="gmail_poll",
-        name="Gmail IUX Auto-Verify",
+        name="Gmail Exness Auto-Verify",
         replace_existing=True,
     )
     scheduler.add_job(
