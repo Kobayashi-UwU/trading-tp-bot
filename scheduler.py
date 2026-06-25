@@ -61,12 +61,13 @@ def send_pending_reminders(configuration, db) -> None:
 
     logger.info(f"Sending pending reminders to {len(users)} user(s)")
     _REMINDER_MSG = (
-        "ชื่อยังไม่ขึ้นในระบบนะครับ แนะนำให้ลองโอนย้าย Partner ก่อนนะครับ\n"
-        "👇👇👇\n"
-        "ทัก Live Chat ในเว็บไซต์ Exness (exness.com) แล้วทำตามขั้นตอนที่เว็บไซต์ได้อธิบายไว้ครับ\n\n"
-        "Partner code:\n"
-        "lut0605b6n\n\n"
-        "หลังจากโอนย้ายเสร็จแล้วแจ้งผมได้เลยครับผม"
+        "⏳ Admin กำลังตรวจสอบบัญชี Exness ของคุณอยู่นะครับ\n\n"
+        "หากยังไม่ได้สมัครผ่าน TradingTP สามารถสมัครได้ที่:\n"
+        "https://one.exnessonelink.com/a/lut0605b6n\n\n"
+        "หรือถ้ามีบัญชี Exness อยู่แล้ว ต้องโอนย้าย Partner ก่อนนะครับ\n"
+        "→ ทัก Live Chat ที่เว็บ Exness (exness.com)\n"
+        "→ Partner code: lut0605b6n\n\n"
+        "หลังจากโอนย้ายเสร็จแล้วแจ้งผมได้เลยครับผม 🙏"
     )
 
     for user in users:
@@ -110,18 +111,24 @@ def _notify_admin(configuration, db, text: str) -> None:
 
 
 def start_scheduler(configuration, db) -> BackgroundScheduler:
-    from gmail_poller import poll_new_iux_emails
+    _gmail_verify_enabled = os.environ.get("GMAIL_VERIFY_ENABLED", "true").lower() == "true"
 
     scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Bangkok"))
-    scheduler.add_job(
-        poll_new_iux_emails,
-        trigger="interval",
-        minutes=60,
-        args=[configuration, db],
-        id="gmail_poll",
-        name="Gmail Exness Auto-Verify",
-        replace_existing=True,
-    )
+
+    if _gmail_verify_enabled:
+        from gmail_poller import poll_new_iux_emails
+        scheduler.add_job(
+            poll_new_iux_emails,
+            trigger="interval",
+            minutes=60,
+            args=[configuration, db],
+            id="gmail_poll",
+            name="Gmail Exness Auto-Verify",
+            replace_existing=True,
+        )
+        logger.info("Gmail auto-verify job scheduled (every 60 min)")
+    else:
+        logger.info("Gmail auto-verify is DISABLED (GMAIL_VERIFY_ENABLED=false)")
     scheduler.add_job(
         send_pending_reminders,
         trigger="interval",
